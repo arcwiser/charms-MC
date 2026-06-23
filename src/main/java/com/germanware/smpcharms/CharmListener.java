@@ -78,19 +78,27 @@ public final class CharmListener implements Listener {
 
         if (service.isUpgradeCatalyst(item) && (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK)) {
             event.setCancelled(true);
-            ItemStack charmInHand = event.getPlayer().getInventory().getItemInOffHand();
-            boolean isOffHand = charmInHand != null && service.isCharm(charmInHand);
-            if (!isOffHand) {
-                charmInHand = event.getPlayer().getInventory().getItemInMainHand();
+            ItemStack mainHand = event.getPlayer().getInventory().getItemInMainHand();
+            ItemStack offHand = event.getPlayer().getInventory().getItemInOffHand();
+            ItemStack charmToUpgrade = null;
+            boolean charmInMain = false;
+
+            if (mainHand != null && service.isCharm(mainHand)) {
+                charmToUpgrade = mainHand;
+                charmInMain = true;
+            } else if (offHand != null && service.isCharm(offHand)) {
+                charmToUpgrade = offHand;
+                charmInMain = false;
             }
-            if (charmInHand != null && service.isCharm(charmInHand)) {
-                CharmItem charm = service.readCharm(charmInHand);
+
+            if (charmToUpgrade != null) {
+                CharmItem charm = service.readCharm(charmToUpgrade);
                 if (charm != null && charm.level() < 2) {
                     ItemStack upgraded = service.createCharm(charm.type(), 2);
-                    if (isOffHand) {
-                        event.getPlayer().getInventory().setItemInOffHand(upgraded);
-                    } else {
+                    if (charmInMain) {
                         event.getPlayer().getInventory().setItemInMainHand(upgraded);
+                    } else {
+                        event.getPlayer().getInventory().setItemInOffHand(upgraded);
                     }
                     event.getItem().setAmount(event.getItem().getAmount() - 1);
                     event.getPlayer().sendMessage(ChatColor.GREEN + "Charm upgraded to Lv.2");
@@ -103,18 +111,26 @@ public final class CharmListener implements Listener {
 
         if (service.isSwapCatalyst(item) && (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK)) {
             event.setCancelled(true);
-            ItemStack charmInHand = event.getPlayer().getInventory().getItemInOffHand();
-            boolean isOffHand = charmInHand != null && service.isCharm(charmInHand);
-            if (!isOffHand) {
-                charmInHand = event.getPlayer().getInventory().getItemInMainHand();
+            ItemStack mainHand = event.getPlayer().getInventory().getItemInMainHand();
+            ItemStack offHand = event.getPlayer().getInventory().getItemInOffHand();
+            ItemStack charmToSwap = null;
+            boolean charmInMain = false;
+
+            if (mainHand != null && service.isCharm(mainHand)) {
+                charmToSwap = mainHand;
+                charmInMain = true;
+            } else if (offHand != null && service.isCharm(offHand)) {
+                charmToSwap = offHand;
+                charmInMain = false;
             }
-            if (charmInHand != null && service.isCharm(charmInHand)) {
+
+            if (charmToSwap != null) {
                 CharmItem newCharm = new CharmItem(service.pickRandomCharmType(), 1);
                 ItemStack swapped = service.createCharm(newCharm.type(), 1);
-                if (isOffHand) {
-                    event.getPlayer().getInventory().setItemInOffHand(swapped);
-                } else {
+                if (charmInMain) {
                     event.getPlayer().getInventory().setItemInMainHand(swapped);
+                } else {
+                    event.getPlayer().getInventory().setItemInOffHand(swapped);
                 }
                 event.getItem().setAmount(event.getItem().getAmount() - 1);
                 event.getPlayer().sendMessage(ChatColor.GREEN + "Charm swapped to " + newCharm.type().displayName() + " Lv.1");

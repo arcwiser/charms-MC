@@ -607,6 +607,14 @@ public final class CharmService {
         setStoredItems(player, stored, size);
     }
 
+    public void saveAllPlayerData(Player player) {
+        if (player.getOpenInventory() != null && player.getOpenInventory().getTopInventory().getHolder() instanceof CharmStorageHolder holder) {
+            if (holder.owner().equals(player.getUniqueId())) {
+                saveStorageFromInventory(player, player.getOpenInventory().getTopInventory().getStorageContents());
+            }
+        }
+    }
+
     public void splitStorageOnDeath(Player player) {
         ItemStack[] stored = getStoredItems(player);
         if (stored.length == 0) {

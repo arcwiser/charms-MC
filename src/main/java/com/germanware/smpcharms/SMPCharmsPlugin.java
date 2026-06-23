@@ -31,6 +31,10 @@ public final class SMPCharmsPlugin extends JavaPlugin {
         if (upkeepTask != null) {
             upkeepTask.cancel();
         }
+        for (org.bukkit.entity.Player player : Bukkit.getOnlinePlayers()) {
+            charmService.saveAllPlayerData(player);
+        }
+        Bukkit.getLogger().info("[SMPCharms] Saved all player data on disable");
     }
 
     public NamespacedKey key(String value) {
