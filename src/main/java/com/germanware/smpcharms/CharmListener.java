@@ -79,17 +79,18 @@ public final class CharmListener implements Listener {
         if (service.isUpgradeCatalyst(item) && (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK)) {
             event.setCancelled(true);
             ItemStack charmInHand = event.getPlayer().getInventory().getItemInOffHand();
-            if (charmInHand == null || !service.isCharm(charmInHand)) {
+            boolean isOffHand = charmInHand != null && service.isCharm(charmInHand);
+            if (!isOffHand) {
                 charmInHand = event.getPlayer().getInventory().getItemInMainHand();
             }
             if (charmInHand != null && service.isCharm(charmInHand)) {
                 CharmItem charm = service.readCharm(charmInHand);
                 if (charm != null && charm.level() < 2) {
                     ItemStack upgraded = service.createCharm(charm.type(), 2);
-                    if (charmInHand.equals(event.getPlayer().getInventory().getItemInMainHand())) {
-                        event.getPlayer().getInventory().setItemInMainHand(upgraded);
-                    } else {
+                    if (isOffHand) {
                         event.getPlayer().getInventory().setItemInOffHand(upgraded);
+                    } else {
+                        event.getPlayer().getInventory().setItemInMainHand(upgraded);
                     }
                     event.getItem().setAmount(event.getItem().getAmount() - 1);
                     event.getPlayer().sendMessage(ChatColor.GREEN + "Charm upgraded to Lv.2");
@@ -103,16 +104,17 @@ public final class CharmListener implements Listener {
         if (service.isSwapCatalyst(item) && (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK)) {
             event.setCancelled(true);
             ItemStack charmInHand = event.getPlayer().getInventory().getItemInOffHand();
-            if (charmInHand == null || !service.isCharm(charmInHand)) {
+            boolean isOffHand = charmInHand != null && service.isCharm(charmInHand);
+            if (!isOffHand) {
                 charmInHand = event.getPlayer().getInventory().getItemInMainHand();
             }
             if (charmInHand != null && service.isCharm(charmInHand)) {
                 CharmItem newCharm = new CharmItem(service.pickRandomCharmType(), 1);
                 ItemStack swapped = service.createCharm(newCharm.type(), 1);
-                if (charmInHand.equals(event.getPlayer().getInventory().getItemInMainHand())) {
-                    event.getPlayer().getInventory().setItemInMainHand(swapped);
-                } else {
+                if (isOffHand) {
                     event.getPlayer().getInventory().setItemInOffHand(swapped);
+                } else {
+                    event.getPlayer().getInventory().setItemInMainHand(swapped);
                 }
                 event.getItem().setAmount(event.getItem().getAmount() - 1);
                 event.getPlayer().sendMessage(ChatColor.GREEN + "Charm swapped to " + newCharm.type().displayName() + " Lv.1");
@@ -265,8 +267,6 @@ public final class CharmListener implements Listener {
             inventory.setResult(service.craftUpgradeResult(inventory.getMatrix()));
         } else if (service.canCraftSwap(inventory.getMatrix())) {
             inventory.setResult(service.craftSwapResult(service.pickRandomCharmType()));
-        } else {
-            inventory.setResult(null);
         }
     }
 
