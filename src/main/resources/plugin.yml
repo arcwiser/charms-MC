@@ -1,0 +1,21 @@
+name: SMPCharms
+version: 1.0.0
+main: com.germanware.smpcharms.SMPCharmsPlugin
+api-version: '1.21'
+author: Codex
+description: SMP charm class system with upgrades and swaps
+commands:
+  charm:
+    description: Charm admin command
+    usage: /charm <help|list|info|reroll|menu|recipe|storage|give|swap|member|rerollall|giveupgradeitem|giveswapitem|reload>
+    permission: smpcharms.admin
+  recipe:
+    description: Show charm crafting recipes
+    usage: /recipe
+  trade:
+    description: Trade your held charm with another player
+    usage: /trade <player|accept|deny>
+permissions:
+  smpcharms.admin:
+    default: op
+

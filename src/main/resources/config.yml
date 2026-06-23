@@ -1,0 +1,75 @@
+menu:
+  title: "&6SMP Charms"
+
+charms:
+  strength:
+    level1:
+      hunger-penalty: 1
+      strength-amplifier: 0
+    level2:
+      hunger-penalty: 2
+      strength-amplifier: 1
+  health:
+    level1:
+      max-health: 26.0
+      slowness-amplifier: 0
+    level2:
+      max-health: 30.0
+      slowness-amplifier: 1
+  feather:
+    level1:
+      max-health: 16.0
+      speed-amplifier: 0
+    level2:
+      max-health: 14.0
+      speed-amplifier: 1
+  wealth:
+    level1:
+      fortune: 2
+    level2:
+      fortune: 3
+  phantom:
+    level1:
+      invisible-max-health: 6.0
+      hunger-penalty: 1
+    level2:
+      invisible-max-health: 10.0
+      hunger-penalty: 2
+  luck:
+    level1:
+      luck-amplifier: 0
+    level2:
+      luck-amplifier: 1
+      hero-of-the-village: 2
+  warden:
+    level1:
+      resistance-amplifier: 0
+      absorption-amplifier: 0
+    level2:
+      resistance-amplifier: 1
+      absorption-amplifier: 1
+  miner:
+    level1:
+      haste-amplifier: 0
+      hunger-amplifier: 0
+    level2:
+      haste-amplifier: 1
+      hunger-amplifier: 1
+  ocean:
+    level1:
+      speed-in-water: true
+      weakness-amplifier: 0
+    level2:
+      dolphins-grace: true
+      weakness-amplifier: 1
+
+recipes:
+  upgrade:
+    netherite: 1
+    diamond-blocks: 3
+    totems: 1
+  swap:
+    netherite: 3
+    diamond-blocks: 1
+    totems: 2
+  require-crafting: true

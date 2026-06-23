@@ -1,0 +1,358 @@
+package com.germanware.smpcharms;
+
+import org.bukkit.ChatColor;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.entity.FoodLevelChangeEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.PrepareItemCraftEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.inventory.CraftingInventory;
+import org.bukkit.inventory.InventoryView;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataType;
+
+public final class CharmListener implements Listener {
+    private final SMPCharmsPlugin plugin;
+    private final CharmService service;
+    private final CharmMenu menu;
+
+    public CharmListener(SMPCharmsPlugin plugin, CharmService service) {
+        this.plugin = plugin;
+        this.service = service;
+        this.menu = new CharmMenu(service);
+    }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        if (!service.hasActiveCharm(player)) {
+            service.giveStarterPackage(player);
+            player.sendMessage(ChatColor.GOLD + "You have joined as a Member.");
+            player.sendMessage(ChatColor.YELLOW + "You received 1 free reroll and a random starter charm.");
+        }
+    }
+
+    @EventHandler
+    public void onQuit(org.bukkit.event.player.PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        if (player.getOpenInventory() != null && player.getOpenInventory().getTopInventory().getHolder() instanceof CharmStorageHolder holder) {
+            if (holder.owner().equals(player.getUniqueId())) {
+                service.saveStorageFromInventory(player, player.getOpenInventory().getTopInventory().getStorageContents());
+                player.getPersistentDataContainer().remove(service.storageOpenKey());
+            }
+        }
+        CharmItem active = service.getActiveCharm(player);
+        if (active != null && active.type() == CharmType.STORAGE && service.hasStorage(player)) {
+            service.saveStorageFromInventory(player, service.getStoredItems(player));
+        }
+    }
+
+    @EventHandler
+    public void onInteract(PlayerInteractEvent event) {
+        ItemStack item = event.getItem();
+        if (item == null) {
+            return;
+        }
+
+        if (service.isMemberBadge(item) && (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK)) {
+            event.setCancelled(true);
+            if (service.rerollStarter(event.getPlayer())) {
+                decrementMemberBadge(event.getPlayer(), item);
+                event.getPlayer().sendMessage(ChatColor.GREEN + "Your starter charm was rerolled.");
+            } else {
+                event.getPlayer().sendMessage(ChatColor.RED + "You have no rerolls left.");
+            }
+            return;
+        }
+
+        if (service.isUpgradeCatalyst(item) && (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK)) {
+            event.setCancelled(true);
+            ItemStack charmInHand = event.getPlayer().getInventory().getItemInOffHand();
+            if (charmInHand == null || !service.isCharm(charmInHand)) {
+                charmInHand = event.getPlayer().getInventory().getItemInMainHand();
+            }
+            if (charmInHand != null && service.isCharm(charmInHand)) {
+                CharmItem charm = service.readCharm(charmInHand);
+                if (charm != null && charm.level() < 2) {
+                    ItemStack upgraded = service.createCharm(charm.type(), 2);
+                    if (charmInHand.equals(event.getPlayer().getInventory().getItemInMainHand())) {
+                        event.getPlayer().getInventory().setItemInMainHand(upgraded);
+                    } else {
+                        event.getPlayer().getInventory().setItemInOffHand(upgraded);
+                    }
+                    event.getItem().setAmount(event.getItem().getAmount() - 1);
+                    event.getPlayer().sendMessage(ChatColor.GREEN + "Charm upgraded to Lv.2");
+                    return;
+                }
+            }
+            event.getPlayer().sendMessage(ChatColor.RED + "Hold a charm in your main or off hand to upgrade it.");
+            return;
+        }
+
+        if (service.isSwapCatalyst(item) && (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK)) {
+            event.setCancelled(true);
+            ItemStack charmInHand = event.getPlayer().getInventory().getItemInOffHand();
+            if (charmInHand == null || !service.isCharm(charmInHand)) {
+                charmInHand = event.getPlayer().getInventory().getItemInMainHand();
+            }
+            if (charmInHand != null && service.isCharm(charmInHand)) {
+                CharmItem newCharm = new CharmItem(service.pickRandomCharmType(), 1);
+                ItemStack swapped = service.createCharm(newCharm.type(), 1);
+                if (charmInHand.equals(event.getPlayer().getInventory().getItemInMainHand())) {
+                    event.getPlayer().getInventory().setItemInMainHand(swapped);
+                } else {
+                    event.getPlayer().getInventory().setItemInOffHand(swapped);
+                }
+                event.getItem().setAmount(event.getItem().getAmount() - 1);
+                event.getPlayer().sendMessage(ChatColor.GREEN + "Charm swapped to " + newCharm.type().displayName() + " Lv.1");
+                return;
+            }
+            event.getPlayer().sendMessage(ChatColor.RED + "Hold a charm in your main or off hand to swap it.");
+            return;
+        }
+
+        if (!service.isCharm(item)) {
+            return;
+        }
+
+        CharmItem charm = service.readCharm(item);
+        if (charm == null) {
+            return;
+        }
+
+        if (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK) {
+            event.setCancelled(true);
+        }
+
+        service.setActiveCharm(event.getPlayer(), charm);
+
+        if (charm.type() == CharmType.AIR && charm.level() >= 2 && (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK)) {
+            boolean enabled = service.toggleAirBoost(event.getPlayer());
+            event.getPlayer().sendMessage(ChatColor.GRAY + "Air boost " + (enabled ? "enabled" : "disabled") + ".");
+            return;
+        }
+
+        if (charm.type() == CharmType.STORAGE && (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK)) {
+            event.setCancelled(true);
+            service.openStorage(event.getPlayer(), charm);
+            return;
+        }
+
+        if (charm.type() == CharmType.PHANTOM) {
+            service.togglePhantom(event.getPlayer());
+            event.getPlayer().sendMessage(ChatColor.GRAY + "Phantom cloak toggled.");
+            return;
+        }
+
+        event.getPlayer().sendMessage(ChatColor.GOLD + "Activated " + charm.type().displayName() + ChatColor.GRAY + " Lv." + charm.level());
+    }
+
+    @EventHandler
+    public void onDrop(PlayerDropItemEvent event) {
+        if (service.isCharm(event.getItemDrop().getItemStack())) {
+            event.getItemDrop().remove();
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onDamage(EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof Player player)) {
+            return;
+        }
+        CharmItem active = service.getActiveCharm(player);
+        if (active == null) {
+            return;
+        }
+
+        if (active.type() == CharmType.FEATHER && event.getCause() == EntityDamageEvent.DamageCause.FALL) {
+            event.setDamage(active.level() >= 2 ? 0.0 : event.getDamage() * 0.5);
+        }
+
+        if (active.type() == CharmType.WARDEN) {
+            event.setDamage(event.getDamage() * (active.level() >= 2 ? 0.75 : 0.85));
+        }
+    }
+
+    @EventHandler
+    public void onDamageByEntity(EntityDamageByEntityEvent event) {
+        if (!(event.getDamager() instanceof Player attacker)) {
+            return;
+        }
+
+        CharmItem active = service.getActiveCharm(attacker);
+        if (active == null) {
+            return;
+        }
+
+        if (active.type() == CharmType.WEALTH || active.type() == CharmType.LUCK) {
+            event.setDamage(event.getDamage() * (active.level() >= 2 ? 0.8 : 0.9));
+        }
+
+        if (active.type() == CharmType.PHANTOM) {
+            service.revealPhantom(attacker);
+            attacker.sendMessage(ChatColor.RED + "You were revealed!");
+        }
+    }
+
+    @EventHandler
+    public void onFood(FoodLevelChangeEvent event) {
+        if (!(event.getEntity() instanceof Player player)) {
+            return;
+        }
+        CharmItem active = service.getActiveCharm(player);
+        if (active == null) {
+            return;
+        }
+
+        if (active.type() == CharmType.STRENGTH) {
+            event.setFoodLevel(Math.max(0, event.getFoodLevel() - (active.level() >= 2 ? 2 : 1)));
+        }
+        if (active.type() == CharmType.PHANTOM && Boolean.FALSE.equals(player.getPersistentDataContainer().get(service.phantomVisibleKey(), PersistentDataType.BOOLEAN))) {
+            event.setFoodLevel(Math.max(0, event.getFoodLevel() - (active.level() >= 2 ? 2 : 1)));
+        }
+    }
+
+    @EventHandler
+    public void onDeath(EntityDeathEvent event) {
+        if (event.getEntity() instanceof Player player) {
+            event.getDrops().removeIf(service::isCharm);
+            CharmItem active = service.getActiveCharm(player);
+            if (active != null && service.isStorageCharm(active)) {
+                service.splitStorageOnDeath(player);
+            }
+        }
+    }
+
+    @EventHandler
+    public void onRespawn(PlayerRespawnEvent event) {
+        Player player = event.getPlayer();
+        CharmItem active = service.getActiveCharm(player);
+        if (active == null) {
+            return;
+        }
+
+        Integer slot = service.getActiveSlot(player);
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            ItemStack charmItem = service.createCharm(active.type(), active.level());
+            if (slot != null && slot >= 0 && slot < player.getInventory().getSize()) {
+                player.getInventory().setItem(slot, charmItem.clone());
+                player.getInventory().setHeldItemSlot(slot);
+            } else {
+                player.getInventory().setItemInMainHand(charmItem.clone());
+            }
+            service.applyEffects(player, active);
+        });
+    }
+
+    @EventHandler
+    public void onPrepareCraft(PrepareItemCraftEvent event) {
+        if (!(event.getInventory() instanceof CraftingInventory inventory)) {
+            return;
+        }
+        if (service.canCraftUpgrade(inventory.getMatrix())) {
+            inventory.setResult(service.craftUpgradeResult(inventory.getMatrix()));
+        } else if (service.canCraftSwap(inventory.getMatrix())) {
+            inventory.setResult(service.craftSwapResult(service.pickRandomCharmType()));
+        } else {
+            inventory.setResult(null);
+        }
+    }
+
+    @EventHandler
+    public void onInventoryClose(InventoryCloseEvent event) {
+        if (!(event.getPlayer() instanceof Player player)) {
+            return;
+        }
+        if (!(event.getInventory().getHolder() instanceof CharmStorageHolder holder)) {
+            return;
+        }
+        if (!holder.owner().equals(player.getUniqueId())) {
+            return;
+        }
+        service.saveStorageFromInventory(player, event.getInventory().getStorageContents());
+        player.getPersistentDataContainer().remove(service.storageOpenKey());
+    }
+
+    @EventHandler
+    public void onMenuClick(InventoryClickEvent event) {
+        InventoryView view = event.getView();
+        if (!menu.title().equals(view.getTitle())) {
+            return;
+        }
+        event.setCancelled(true);
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
+        int slot = event.getRawSlot();
+        if (slot == 22) {
+            player.closeInventory();
+            return;
+        }
+        if (slot == 18) {
+            if (player.hasPermission("smpcharms.admin")) {
+                plugin.reloadConfig();
+                player.sendMessage(ChatColor.GREEN + "SMP Charms config reloaded.");
+            } else {
+                player.sendMessage(ChatColor.RED + "No permission.");
+            }
+            return;
+        }
+        if (slot == 10) {
+            CharmItem active = service.getActiveCharm(player);
+            player.sendMessage(ChatColor.AQUA + "Active: " + (active == null ? "none" : active.type().displayName() + " Lv." + active.level()));
+        } else if (slot == 12) {
+            if (service.rerollStarter(player)) {
+                player.sendMessage(ChatColor.GREEN + "Your starter charm has been rerolled.");
+            } else {
+                player.sendMessage(ChatColor.RED + "You have no rerolls left.");
+            }
+        } else if (slot == 14) {
+            for (String line : service.getCharmCatalog()) {
+                player.sendMessage(ChatColor.GRAY + "- " + line);
+            }
+        } else if (slot == 16) {
+            player.sendMessage(ChatColor.GRAY + "Strength = burst damage");
+            player.sendMessage(ChatColor.GRAY + "Health = tank");
+            player.sendMessage(ChatColor.GRAY + "Feather = mobility");
+            player.sendMessage(ChatColor.GRAY + "Wealth = pickaxe fortune + economy");
+            player.sendMessage(ChatColor.GRAY + "Phantom = stealth");
+            player.sendMessage(ChatColor.GRAY + "Luck = village favor + loot luck");
+            player.sendMessage(ChatColor.GRAY + "Warden = damage soak");
+            player.sendMessage(ChatColor.GRAY + "Miner = mining speed and vision");
+            player.sendMessage(ChatColor.GRAY + "Ocean = underwater mobility");
+            player.sendMessage(ChatColor.GRAY + "Air = aerial mobility");
+            player.sendMessage(ChatColor.GRAY + "Sneak-right-click Air level 2 to toggle the speed boost.");
+        } else if (slot == 20) {
+            player.sendMessage(ChatColor.BLUE + "Upgrade Recipe:");
+            player.sendMessage(ChatColor.GRAY + "1 base charm + 1 Netherite + 3 Diamond Blocks + 1 Totem");
+            player.sendMessage(ChatColor.BLUE + "Swap Recipe:");
+            player.sendMessage(ChatColor.GRAY + "1 base charm + 3 Netherite + 1 Diamond Block + 2 Totems");
+        }
+    }
+
+    private void decrementMemberBadge(Player player, ItemStack badge) {
+        int rerolls = Math.max(0, service.getRerolls(player));
+        service.setRerolls(player, rerolls);
+        player.getInventory().removeItem(badge);
+        if (rerolls > 0) {
+            player.getInventory().addItem(service.createMemberBadge(rerolls));
+        }
+    }
+}
+
+
+
+
+
