@@ -797,8 +797,13 @@ public final class CharmService {
             int size = config.getInt("size", 0);
             ItemStack[] items = new ItemStack[size];
             for (int i = 0; i < size; i++) {
-                if (config.contains("items." + i)) {
-                    items[i] = config.getItemStack("items." + i);
+                try {
+                    if (config.contains("items." + i)) {
+                        items[i] = config.getItemStack("items." + i);
+                    }
+                } catch (Exception e) {
+                    // Skip this item if it fails to load
+                    plugin.getLogger().warning("Failed to load item at index " + i + " for " + player.getName());
                 }
             }
             // Extract items for the specific page
@@ -832,8 +837,13 @@ public final class CharmService {
             int size = config.getInt("size", 0);
             ItemStack[] items = new ItemStack[size];
             for (int i = 0; i < size; i++) {
-                if (config.contains("items." + i)) {
-                    items[i] = config.getItemStack("items." + i);
+                try {
+                    if (config.contains("items." + i)) {
+                        items[i] = config.getItemStack("items." + i);
+                    }
+                } catch (Exception e) {
+                    // Skip this item if it fails to load
+                    plugin.getLogger().warning("Failed to load item at index " + i + " for " + owner);
                 }
             }
             // Extract items for the specific page
@@ -860,8 +870,13 @@ public final class CharmService {
             int size = config.getInt("size", 0);
             ItemStack[] items = new ItemStack[size];
             for (int i = 0; i < size; i++) {
-                if (config.contains("items." + i)) {
-                    items[i] = config.getItemStack("items." + i);
+                try {
+                    if (config.contains("items." + i)) {
+                        items[i] = config.getItemStack("items." + i);
+                    }
+                } catch (Exception e) {
+                    // Skip this item if it fails to load
+                    plugin.getLogger().warning("Failed to load item at index " + i + " for storage " + storageId);
                 }
             }
             // Extract items for the specific page
@@ -891,8 +906,13 @@ public final class CharmService {
                 YamlConfiguration config = YamlConfiguration.loadConfiguration(reader);
                 int size = config.getInt("size", 0);
                 for (int i = 0; i < size; i++) {
-                    if (config.contains("items." + i)) {
-                        allItems[i] = config.getItemStack("items." + i);
+                    try {
+                        if (config.contains("items." + i)) {
+                            allItems[i] = config.getItemStack("items." + i);
+                        }
+                    } catch (Exception e) {
+                        // Skip this item if it fails to load
+                        plugin.getLogger().warning("Failed to load item at index " + i + " for " + player.getName());
                     }
                 }
             } catch (Exception e) {
