@@ -789,23 +789,28 @@ public final class CharmService {
         if (raw == null || raw.isBlank()) {
             return new ItemStack[baseSize];
         }
+        
         try {
             byte[] data = Base64.getDecoder().decode(raw);
             java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(data);
             java.io.InputStreamReader reader = new java.io.InputStreamReader(bais);
             YamlConfiguration config = YamlConfiguration.loadConfiguration(reader);
+            
             int size = config.getInt("size", 0);
             ItemStack[] items = new ItemStack[size];
+            
+            // Try to load items
             for (int i = 0; i < size; i++) {
                 try {
-                    if (config.contains("items." + i)) {
-                        items[i] = config.getItemStack("items." + i);
+                    Object itemObj = config.get("items." + i);
+                    if (itemObj instanceof ItemStack item) {
+                        items[i] = item;
                     }
                 } catch (Exception e) {
                     // Skip this item if it fails to load
-                    plugin.getLogger().warning("Failed to load item at index " + i + " for " + player.getName());
                 }
             }
+            
             // Extract items for the specific page
             int pageStart = page * baseSize;
             ItemStack[] pageItems = new ItemStack[baseSize];
@@ -815,7 +820,10 @@ public final class CharmService {
             return pageItems;
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to load storage charm data for " + player.getName() + ": " + e.getMessage());
-            e.printStackTrace();
+            plugin.getLogger().warning("Clearing corrupted storage data for " + player.getName());
+            // Clear the corrupted data
+            player.getPersistentDataContainer().remove(storageDataKey);
+            player.getPersistentDataContainer().remove(storageSizeKey);
         }
         return new ItemStack[baseSize];
     }
