@@ -87,28 +87,19 @@ public final class CharmListener implements Listener {
         if (service.isUpgradeCatalyst(item) && (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK)) {
             event.setCancelled(true);
             
-            ItemStack mainHand = event.getPlayer().getInventory().getItemInMainHand();
-            ItemStack offHand = event.getPlayer().getInventory().getItemInOffHand();
-            ItemStack charmToUpgrade = null;
-            boolean charmInMain = false;
+            // Check the other hand for a charm (not the hand holding the catalyst)
+            ItemStack otherHand = event.getHand() == org.bukkit.inventory.EquipmentSlot.HAND 
+                ? event.getPlayer().getInventory().getItemInOffHand()
+                : event.getPlayer().getInventory().getItemInMainHand();
             
-            // Check both hands for a charm
-            if (mainHand != null && service.isCharm(mainHand)) {
-                charmToUpgrade = mainHand;
-                charmInMain = true;
-            } else if (offHand != null && service.isCharm(offHand)) {
-                charmToUpgrade = offHand;
-                charmInMain = false;
-            }
-
-            if (charmToUpgrade != null) {
-                CharmItem charm = service.readCharm(charmToUpgrade);
+            if (otherHand != null && service.isCharm(otherHand)) {
+                CharmItem charm = service.readCharm(otherHand);
                 if (charm != null && charm.level() < 2) {
                     ItemStack upgraded = service.createCharm(charm.type(), 2);
-                    if (charmInMain) {
-                        event.getPlayer().getInventory().setItemInMainHand(upgraded);
-                    } else {
+                    if (event.getHand() == org.bukkit.inventory.EquipmentSlot.HAND) {
                         event.getPlayer().getInventory().setItemInOffHand(upgraded);
+                    } else {
+                        event.getPlayer().getInventory().setItemInMainHand(upgraded);
                     }
                     event.getItem().setAmount(event.getItem().getAmount() - 1);
                     event.getPlayer().sendMessage(ChatColor.GREEN + "Charm upgraded to Lv.2");
@@ -122,27 +113,18 @@ public final class CharmListener implements Listener {
         if (service.isSwapCatalyst(item) && (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK)) {
             event.setCancelled(true);
             
-            ItemStack mainHand = event.getPlayer().getInventory().getItemInMainHand();
-            ItemStack offHand = event.getPlayer().getInventory().getItemInOffHand();
-            ItemStack charmToSwap = null;
-            boolean charmInMain = false;
+            // Check the other hand for a charm (not the hand holding the catalyst)
+            ItemStack otherHand = event.getHand() == org.bukkit.inventory.EquipmentSlot.HAND 
+                ? event.getPlayer().getInventory().getItemInOffHand()
+                : event.getPlayer().getInventory().getItemInMainHand();
             
-            // Check both hands for a charm
-            if (mainHand != null && service.isCharm(mainHand)) {
-                charmToSwap = mainHand;
-                charmInMain = true;
-            } else if (offHand != null && service.isCharm(offHand)) {
-                charmToSwap = offHand;
-                charmInMain = false;
-            }
-
-            if (charmToSwap != null) {
+            if (otherHand != null && service.isCharm(otherHand)) {
                 CharmItem newCharm = new CharmItem(service.pickRandomCharmType(), 1);
                 ItemStack swapped = service.createCharm(newCharm.type(), 1);
-                if (charmInMain) {
-                    event.getPlayer().getInventory().setItemInMainHand(swapped);
-                } else {
+                if (event.getHand() == org.bukkit.inventory.EquipmentSlot.HAND) {
                     event.getPlayer().getInventory().setItemInOffHand(swapped);
+                } else {
+                    event.getPlayer().getInventory().setItemInMainHand(swapped);
                 }
                 event.getItem().setAmount(event.getItem().getAmount() - 1);
                 event.getPlayer().sendMessage(ChatColor.GREEN + "Charm swapped to " + newCharm.type().displayName() + " Lv.1");
