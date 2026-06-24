@@ -1,11 +1,16 @@
 package com.germanware.smpcharms;
 
 import org.bukkit.ChatColor;
+import org.bukkit.Material;
 import org.bukkit.attribute.Attribute;
+import org.bukkit.block.Block;
+import org.bukkit.block.data.Ageable;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockGrowEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
@@ -18,14 +23,17 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.CraftingInventory;
-import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.InventoryView;
 import org.bukkit.persistence.PersistentDataType;
+
+import java.util.Random;
 
 public final class CharmListener implements Listener {
     private final SMPCharmsPlugin plugin;
     private final CharmService service;
     private final CharmMenu menu;
+    private final Random random = new Random();
 
     public CharmListener(SMPCharmsPlugin plugin, CharmService service) {
         this.plugin = plugin;
@@ -83,12 +91,19 @@ public final class CharmListener implements Listener {
             ItemStack charmToUpgrade = null;
             boolean charmInMain = false;
 
-            if (mainHand != null && service.isCharm(mainHand)) {
-                charmToUpgrade = mainHand;
-                charmInMain = true;
-            } else if (offHand != null && service.isCharm(offHand)) {
-                charmToUpgrade = offHand;
-                charmInMain = false;
+            // Check which hand has the catalyst, then check the other hand for charm
+            if (mainHand != null && service.isUpgradeCatalyst(mainHand)) {
+                // Catalyst in main hand, check off hand for charm
+                if (offHand != null && service.isCharm(offHand)) {
+                    charmToUpgrade = offHand;
+                    charmInMain = false;
+                }
+            } else if (offHand != null && service.isUpgradeCatalyst(offHand)) {
+                // Catalyst in off hand, check main hand for charm
+                if (mainHand != null && service.isCharm(mainHand)) {
+                    charmToUpgrade = mainHand;
+                    charmInMain = true;
+                }
             }
 
             if (charmToUpgrade != null) {
@@ -105,7 +120,7 @@ public final class CharmListener implements Listener {
                     return;
                 }
             }
-            event.getPlayer().sendMessage(ChatColor.RED + "Hold a charm in your main or off hand to upgrade it.");
+            event.getPlayer().sendMessage(ChatColor.RED + "Hold a charm in your other hand to upgrade it.");
             return;
         }
 
@@ -116,12 +131,19 @@ public final class CharmListener implements Listener {
             ItemStack charmToSwap = null;
             boolean charmInMain = false;
 
-            if (mainHand != null && service.isCharm(mainHand)) {
-                charmToSwap = mainHand;
-                charmInMain = true;
-            } else if (offHand != null && service.isCharm(offHand)) {
-                charmToSwap = offHand;
-                charmInMain = false;
+            // Check which hand has the catalyst, then check the other hand for charm
+            if (mainHand != null && service.isSwapCatalyst(mainHand)) {
+                // Catalyst in main hand, check off hand for charm
+                if (offHand != null && service.isCharm(offHand)) {
+                    charmToSwap = offHand;
+                    charmInMain = false;
+                }
+            } else if (offHand != null && service.isSwapCatalyst(offHand)) {
+                // Catalyst in off hand, check main hand for charm
+                if (mainHand != null && service.isCharm(mainHand)) {
+                    charmToSwap = mainHand;
+                    charmInMain = true;
+                }
             }
 
             if (charmToSwap != null) {
@@ -136,7 +158,7 @@ public final class CharmListener implements Listener {
                 event.getPlayer().sendMessage(ChatColor.GREEN + "Charm swapped to " + newCharm.type().displayName() + " Lv.1");
                 return;
             }
-            event.getPlayer().sendMessage(ChatColor.RED + "Hold a charm in your main or off hand to swap it.");
+            event.getPlayer().sendMessage(ChatColor.RED + "Hold a charm in your other hand to swap it.");
             return;
         }
 
@@ -221,6 +243,98 @@ public final class CharmListener implements Listener {
         if (active.type() == CharmType.PHANTOM) {
             service.revealPhantom(attacker);
             attacker.sendMessage(ChatColor.RED + "You were revealed!");
+        }
+    }
+
+    @EventHandler
+    public void onBlockBreak(BlockBreakEvent event) {
+        Player player = event.getPlayer();
+        CharmItem active = service.getActiveCharm(player);
+        if (active == null || active.type() != CharmType.NATURE) {
+            return;
+        }
+
+        Boolean autoReplant = player.getPersistentDataContainer().get(service.natureAutoReplantKey(), PersistentDataType.BOOLEAN);
+        if (autoReplant == null || !autoReplant) {
+            return;
+        }
+
+        Block block = event.getBlock();
+        Material type = block.getType();
+
+        // List of crops that can be auto-replanted
+        if (isCrop(type)) {
+            if (block.getBlockData() instanceof Ageable ageable) {
+                if (ageable.getAge() == ageable.getMaximumAge()) {
+                    // Crop is fully grown, drop seeds and replant
+                    event.setDropItems(false); // Cancel default drops
+
+                    // Get the seed item for this crop
+                    ItemStack seed = getSeedForCrop(type);
+                    if (seed != null) {
+                        // Drop the harvested crop items
+                        for (ItemStack drop : block.getDrops()) {
+                            block.getWorld().dropItemNaturally(block.getLocation(), drop);
+                        }
+
+                        // Replant the seed
+                        block.setType(type);
+                        if (block.getBlockData() instanceof Ageable newAgeable) {
+                            newAgeable.setAge(0);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private boolean isCrop(Material type) {
+        return type == Material.WHEAT ||
+               type == Material.CARROTS ||
+               type == Material.POTATOES ||
+               type == Material.BEETROOTS ||
+               type == Material.NETHER_WART ||
+               type == Material.COCOA;
+    }
+
+    private ItemStack getSeedForCrop(Material crop) {
+        return switch (crop) {
+            case WHEAT -> new ItemStack(Material.WHEAT_SEEDS);
+            case CARROTS -> new ItemStack(Material.CARROT);
+            case POTATOES -> new ItemStack(Material.POTATO);
+            case BEETROOTS -> new ItemStack(Material.BEETROOT_SEEDS);
+            case NETHER_WART -> new ItemStack(Material.NETHER_WART);
+            case COCOA -> new ItemStack(Material.COCOA_BEANS);
+            default -> null;
+        };
+    }
+
+    @EventHandler
+    public void onBlockGrow(BlockGrowEvent event) {
+        Block block = event.getBlock();
+        // Check if this is a crop block
+        if (!isCrop(block.getType())) {
+            return;
+        }
+
+        // Find the nearest player within 16 blocks
+        for (org.bukkit.entity.Entity entity : block.getWorld().getNearbyEntities(block.getLocation(), 16, 16, 16)) {
+            if (entity instanceof Player player) {
+                CharmItem active = service.getActiveCharm(player);
+                if (active != null && active.type() == CharmType.NATURE) {
+                    Double multiplier = player.getPersistentDataContainer().get(service.natureGrowthMultiplierKey(), PersistentDataType.DOUBLE);
+                    if (multiplier != null && multiplier > 1.0) {
+                        // Apply growth multiplier by randomly advancing growth
+                        if (block.getBlockData() instanceof Ageable ageable) {
+                            if (random.nextDouble() < (multiplier - 1.0) * 0.5) {
+                                int newAge = Math.min(ageable.getAge() + 1, ageable.getMaximumAge());
+                                ageable.setAge(newAge);
+                            }
+                        }
+                    }
+                    return;
+                }
+            }
         }
     }
 

@@ -306,6 +306,8 @@ public final class CharmService {
             case OCEAN -> applyOcean(player, charm.level());
             case AIR -> applyAir(player, charm.level());
             case STORAGE -> applyStorage(player, charm.level());
+            case TRADER -> applyTrader(player, charm.level());
+            case NATURE -> applyNature(player, charm.level());
         }
     }
 
@@ -421,6 +423,31 @@ public final class CharmService {
         }
     }
 
+    private void applyTrader(Player player, int level) {
+        AttributeInstance attr = player.getAttribute(Attribute.MAX_HEALTH);
+        if (attr != null) {
+            double desired = plugin.getConfig().getDouble("charms.trader.level1.max-health", 17.0);
+            attr.setBaseValue(desired);
+            double currentHealth = player.getHealth();
+            double ratio = currentHealth <= 0.0 ? 1.0 : Math.min(1.0, currentHealth / 20.0);
+            player.setHealth(Math.min(desired, Math.max(1.0, desired * ratio)));
+        }
+        int heroLevel = plugin.getConfig().getInt(level == 1 ? "charms.trader.level1.hero-of-the-village" : "charms.trader.level2.hero-of-the-village", level == 1 ? 2 : 4);
+        player.addPotionEffect(new PotionEffect(PotionEffectType.HERO_OF_THE_VILLAGE, 20 * 20, heroLevel, true, false, false));
+        if (level >= 2) {
+            int weaknessAmp = plugin.getConfig().getInt("charms.trader.level2.weakness-amplifier", 1);
+            player.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 20 * 20, weaknessAmp, true, false, false));
+        }
+    }
+
+    private void applyNature(Player player, int level) {
+        player.getPersistentDataContainer().set(plugin.key("nature_auto_replant"), PersistentDataType.BOOLEAN, true);
+        player.getPersistentDataContainer().set(plugin.key("nature_growth_multiplier"), PersistentDataType.DOUBLE, plugin.getConfig().getDouble("charms.nature.level1.crop-growth-multiplier", 2.0));
+        if (level >= 2) {
+            player.getPersistentDataContainer().set(plugin.key("nature_bonemeal_bonus"), PersistentDataType.BOOLEAN, true);
+        }
+    }
+
     private void clearNonPermanentEffects(Player player) {
         for (PotionEffect effect : new ArrayList<>(player.getActivePotionEffects())) {
             player.removePotionEffect(effect.getType());
@@ -432,6 +459,9 @@ public final class CharmService {
         if (attr != null) {
             attr.setBaseValue(20.0);
         }
+        player.getPersistentDataContainer().remove(plugin.key("nature_auto_replant"));
+        player.getPersistentDataContainer().remove(plugin.key("nature_growth_multiplier"));
+        player.getPersistentDataContainer().remove(plugin.key("nature_bonemeal_bonus"));
     }
 
     private void removeOneCharmFromInventory(Player player, CharmItem charm) {
@@ -689,6 +719,18 @@ public final class CharmService {
         return storageOpenKey;
     }
 
+    public NamespacedKey natureAutoReplantKey() {
+        return plugin.key("nature_auto_replant");
+    }
+
+    public NamespacedKey natureGrowthMultiplierKey() {
+        return plugin.key("nature_growth_multiplier");
+    }
+
+    public NamespacedKey natureBonemealBonusKey() {
+        return plugin.key("nature_bonemeal_bonus");
+    }
+
     public String getCharmMenuTitle() {
         return color(plugin.getConfig().getString("menu.title", "&6SMP Charms"));
     }
@@ -726,6 +768,8 @@ public final class CharmService {
             case OCEAN -> level == 1 ? "Water breathing" : "Water breathing + dolphin's grace";
             case AIR -> level == 1 ? "Slow falling + jump boost" : "Toggle speed boost";
             case STORAGE -> level == 1 ? "27-slot vault" : "45-slot vault";
+            case TRADER -> level == 1 ? "Hero of the Village II" : "Hero of the Village IV";
+            case NATURE -> level == 1 ? "Auto-replant crops + 2x growth" : "Auto-replant + 2x growth + bonemeal bonus";
         };
     }
 
@@ -740,8 +784,10 @@ public final class CharmService {
             case WARDEN -> level == 1 ? "Lower movement speed" : "Heavier movement penalty";
             case MINER -> level == 1 ? "Hunger I" : "Hunger II";
             case OCEAN -> level == 1 ? "Weakness I" : "Weakness II";
-            case AIR -> level == 1 ? "Weakness I" : "Weakness I until boost is activated, then Weakness II";
+            case AIR -> level == 1 ? "Weakness I" : "Weakness II (boosted)";
             case STORAGE -> level == 1 ? "Slowness I" : "Slowness I + Weakness I";
+            case TRADER -> level == 1 ? "-3 hearts max HP" : "-3 hearts max HP + Weakness I";
+            case NATURE -> level == 1 ? "None" : "None";
         };
     }
 }

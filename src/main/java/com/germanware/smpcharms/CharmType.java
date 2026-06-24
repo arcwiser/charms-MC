@@ -11,7 +11,9 @@ public enum CharmType {
     MINER("Miner Charm", "Deep Miner"),
     OCEAN("Ocean Charm", "Tide Walker"),
     AIR("Air Charm", "Sky Runner"),
-    STORAGE("Storage Charm", "Portable Vault");
+    STORAGE("Storage Charm", "Portable Vault"),
+    TRADER("Trader Charm", "Merchant"),
+    NATURE("Nature Charm", "Farmer");
 
     private final String displayName;
     private final String role;

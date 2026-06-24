@@ -62,6 +62,22 @@ charms:
     level2:
       dolphins-grace: true
       weakness-amplifier: 1
+  trader:
+    level1:
+      max-health: 17.0
+      hero-of-the-village: 2
+    level2:
+      max-health: 17.0
+      hero-of-the-village: 4
+      weakness-amplifier: 1
+  nature:
+    level1:
+      auto-replant: true
+      crop-growth-multiplier: 2.0
+    level2:
+      auto-replant: true
+      crop-growth-multiplier: 2.0
+      bonemeal-bonus: true
 
 recipes:
   upgrade:
