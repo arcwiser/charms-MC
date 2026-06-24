@@ -652,24 +652,48 @@ public final class CharmService {
     }
 
     public boolean hasStorage(Player player) {
-        return player.getPersistentDataContainer().has(storageDataKey, PersistentDataType.STRING);
+        // Get storage ID from player's active charm
+        String storageId = getStorageId(player);
+        if (storageId == null) {
+            storageId = player.getUniqueId().toString();
+        }
+        
+        java.io.File dataFile = new java.io.File(plugin.getDataFolder(), "storage_" + storageId + ".yml");
+        return dataFile.exists();
     }
 
     public int getStorageSize(Player player) {
-        Integer size = player.getPersistentDataContainer().get(storageSizeKey, PersistentDataType.INTEGER);
-        return size == null ? 27 : size;
+        // Get storage ID from player's active charm
+        String storageId = getStorageId(player);
+        if (storageId == null) {
+            storageId = player.getUniqueId().toString();
+        }
+        
+        java.io.File dataFile = new java.io.File(plugin.getDataFolder(), "storage_" + storageId + ".yml");
+        if (!dataFile.exists()) {
+            return 27;
+        }
+        try {
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(dataFile);
+            return config.getInt("size", 27);
+        } catch (Exception e) {
+            return 27;
+        }
     }
 
     public ItemStack[] getStoredItems(Player player) {
-        String raw = player.getPersistentDataContainer().get(storageDataKey, PersistentDataType.STRING);
-        if (raw == null || raw.isBlank()) {
+        // Get storage ID from player's active charm
+        String storageId = getStorageId(player);
+        if (storageId == null) {
+            storageId = player.getUniqueId().toString();
+        }
+        
+        java.io.File dataFile = new java.io.File(plugin.getDataFolder(), "storage_" + storageId + ".yml");
+        if (!dataFile.exists()) {
             return new ItemStack[0];
         }
         try {
-            byte[] data = Base64.getDecoder().decode(raw);
-            java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(data);
-            java.io.InputStreamReader reader = new java.io.InputStreamReader(bais);
-            YamlConfiguration config = YamlConfiguration.loadConfiguration(reader);
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(dataFile);
             int size = config.getInt("size", 0);
             ItemStack[] items = new ItemStack[size];
             for (int i = 0; i < size; i++) {
@@ -686,6 +710,13 @@ public final class CharmService {
     }
 
     public void setStoredItems(Player player, ItemStack[] items, int size) {
+        // Get storage ID from player's active charm
+        String storageId = getStorageId(player);
+        if (storageId == null) {
+            storageId = player.getUniqueId().toString();
+        }
+        
+        java.io.File dataFile = new java.io.File(plugin.getDataFolder(), "storage_" + storageId + ".yml");
         try {
             YamlConfiguration config = new YamlConfiguration();
             config.set("size", size);
@@ -694,10 +725,7 @@ public final class CharmService {
                     config.set("items." + i, items[i]);
                 }
             }
-            String yaml = config.saveToString();
-            String encoded = Base64.getEncoder().encodeToString(yaml.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            player.getPersistentDataContainer().set(storageDataKey, PersistentDataType.STRING, encoded);
-            player.getPersistentDataContainer().set(storageSizeKey, PersistentDataType.INTEGER, size);
+            config.save(dataFile);
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to save storage charm data for " + player.getName() + ": " + e.getMessage());
             e.printStackTrace();
@@ -785,26 +813,27 @@ public final class CharmService {
     }
 
     public ItemStack[] getStoredItemsForPage(Player player, int page, int baseSize) {
-        String raw = player.getPersistentDataContainer().get(storageDataKey, PersistentDataType.STRING);
-        if (raw == null || raw.isBlank()) {
+        // Get storage ID from player's active charm
+        String storageId = getStorageId(player);
+        if (storageId == null) {
+            storageId = player.getUniqueId().toString();
+        }
+        
+        java.io.File dataFile = new java.io.File(plugin.getDataFolder(), "storage_" + storageId + ".yml");
+        if (!dataFile.exists()) {
             return new ItemStack[baseSize];
         }
         
         try {
-            byte[] data = Base64.getDecoder().decode(raw);
-            java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(data);
-            java.io.InputStreamReader reader = new java.io.InputStreamReader(bais);
-            YamlConfiguration config = YamlConfiguration.loadConfiguration(reader);
-            
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(dataFile);
             int size = config.getInt("size", 0);
             ItemStack[] items = new ItemStack[size];
             
-            // Try to load items
+            // Load items
             for (int i = 0; i < size; i++) {
                 try {
-                    Object itemObj = config.get("items." + i);
-                    if (itemObj instanceof ItemStack item) {
-                        items[i] = item;
+                    if (config.contains("items." + i)) {
+                        items[i] = config.getItemStack("items." + i);
                     }
                 } catch (Exception e) {
                     // Skip this item if it fails to load
@@ -820,10 +849,6 @@ public final class CharmService {
             return pageItems;
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to load storage charm data for " + player.getName() + ": " + e.getMessage());
-            plugin.getLogger().warning("Clearing corrupted storage data for " + player.getName());
-            // Clear the corrupted data
-            player.getPersistentDataContainer().remove(storageDataKey);
-            player.getPersistentDataContainer().remove(storageSizeKey);
         }
         return new ItemStack[baseSize];
     }
@@ -902,16 +927,20 @@ public final class CharmService {
     }
 
     public void setStoredItemsForPage(Player player, int page, ItemStack[] items, int baseSize) {
+        // Get storage ID from player's active charm
+        String storageId = getStorageId(player);
+        if (storageId == null) {
+            storageId = player.getUniqueId().toString();
+        }
+        
+        java.io.File dataFile = new java.io.File(plugin.getDataFolder(), "storage_" + storageId + ".yml");
+        
         // Load all existing items
-        String raw = player.getPersistentDataContainer().get(storageDataKey, PersistentDataType.STRING);
         ItemStack[] allItems = new ItemStack[baseSize * getStoragePages(player)];
         
-        if (raw != null && !raw.isBlank()) {
+        if (dataFile.exists()) {
             try {
-                byte[] data = Base64.getDecoder().decode(raw);
-                java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(data);
-                java.io.InputStreamReader reader = new java.io.InputStreamReader(bais);
-                YamlConfiguration config = YamlConfiguration.loadConfiguration(reader);
+                YamlConfiguration config = YamlConfiguration.loadConfiguration(dataFile);
                 int size = config.getInt("size", 0);
                 for (int i = 0; i < size; i++) {
                     try {
@@ -920,7 +949,6 @@ public final class CharmService {
                         }
                     } catch (Exception e) {
                         // Skip this item if it fails to load
-                        plugin.getLogger().warning("Failed to load item at index " + i + " for " + player.getName());
                     }
                 }
             } catch (Exception e) {
