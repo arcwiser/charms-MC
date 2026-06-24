@@ -489,6 +489,16 @@ public final class CharmListener implements Listener {
                 return;
             }
             
+            // Gateway config button
+            if (slot == lastRowStart + 8) {
+                if (holder.owner().equals(player.getUniqueId())) {
+                    service.openGatewayConfig(player);
+                } else {
+                    player.sendMessage(ChatColor.RED + "Only the storage owner can configure gateways.");
+                }
+                return;
+            }
+            
             // Buy page button
             if (slot == lastRowStart + 7) {
                 if (holder.owner().equals(player.getUniqueId()) && holder.totalPages() < 10) {
@@ -607,6 +617,75 @@ public final class CharmListener implements Listener {
             player.sendMessage(ChatColor.GRAY + "1 base charm + 1 Netherite + 3 Diamond Blocks + 1 Totem");
             player.sendMessage(ChatColor.BLUE + "Swap Recipe:");
             player.sendMessage(ChatColor.GRAY + "1 base charm + 3 Netherite + 1 Diamond Block + 2 Totems");
+        }
+    }
+
+    @EventHandler
+    public void onGatewayConfigClick(InventoryClickEvent event) {
+        if (!event.getView().getTitle().equals(ChatColor.BLUE + "Gateway Configuration")) {
+            return;
+        }
+        event.setCancelled(true);
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
+        int slot = event.getRawSlot();
+        
+        // Page toggle buttons (slots 0-9)
+        if (slot >= 0 && slot < 10) {
+            Integer allowedPagesObj = player.getPersistentDataContainer().get(service.gatewayAllowedPagesKey(), PersistentDataType.INTEGER);
+            int allowedPages = (allowedPagesObj == null) ? -1 : allowedPagesObj;
+            
+            if (allowedPages == -1) {
+                allowedPages = 0; // Start with none if previously all
+                // Set all pages as allowed
+                for (int i = 0; i < 10; i++) {
+                    allowedPages |= (1 << i);
+                }
+            }
+            
+            int pageBit = 1 << slot;
+            allowedPages ^= pageBit; // Toggle the bit
+            player.getPersistentDataContainer().set(service.gatewayAllowedPagesKey(), PersistentDataType.INTEGER, allowedPages);
+            
+            // Refresh the inventory
+            service.openGatewayConfig(player);
+            return;
+        }
+        
+        // Allow All button (slot 45)
+        if (slot == 45) {
+            player.getPersistentDataContainer().set(service.gatewayAllowedPagesKey(), PersistentDataType.INTEGER, -1);
+            service.openGatewayConfig(player);
+            player.sendMessage(ChatColor.GREEN + "All pages allowed");
+            return;
+        }
+        
+        // Deny All button (slot 46)
+        if (slot == 46) {
+            player.getPersistentDataContainer().set(service.gatewayAllowedPagesKey(), PersistentDataType.INTEGER, 0);
+            service.openGatewayConfig(player);
+            player.sendMessage(ChatColor.RED + "All pages denied");
+            return;
+        }
+        
+        // Save button (slot 49)
+        if (slot == 49) {
+            Integer allowedPagesObj = player.getPersistentDataContainer().get(service.gatewayAllowedPagesKey(), PersistentDataType.INTEGER);
+            int allowedPages = (allowedPagesObj == null) ? -1 : allowedPagesObj;
+            
+            // Apply to all gateways in player's inventory
+            int updated = 0;
+            for (ItemStack item : player.getInventory().getContents()) {
+                if (service.isGateway(item) && service.getGatewayOwner(item).equals(player.getUniqueId())) {
+                    service.setGatewayAllowedPages(item, allowedPages);
+                    updated++;
+                }
+            }
+            
+            player.closeInventory();
+            player.sendMessage(ChatColor.GREEN + "Saved! Updated " + updated + " gateway(s).");
+            return;
         }
     }
 

@@ -949,6 +949,17 @@ public final class CharmService {
             ));
             gatewayButton.setItemMeta(gatewayMeta);
             inv.setItem(lastRowStart + 6, gatewayButton);
+            
+            // Gateway config button (owner only)
+            ItemStack configButton = new ItemStack(org.bukkit.Material.BOOK);
+            ItemMeta configMeta = configButton.getItemMeta();
+            configMeta.setDisplayName(ChatColor.BLUE + "Gateway Config");
+            configMeta.setLore(List.of(
+                ChatColor.GRAY + "Click to configure gateway permissions",
+                ChatColor.GRAY + "Select which pages shared users can access"
+            ));
+            configButton.setItemMeta(configMeta);
+            inv.setItem(lastRowStart + 8, configButton);
         }
         
         // Buy page button (owner only)
@@ -963,6 +974,72 @@ public final class CharmService {
             buyButton.setItemMeta(buyMeta);
             inv.setItem(lastRowStart + 7, buyButton);
         }
+    }
+
+    public void openGatewayConfig(Player player) {
+        int totalPages = getStoragePages(player);
+        int allowedPages = -1; // Default to all
+        
+        // Try to get allowed pages from existing gateway in inventory
+        for (ItemStack item : player.getInventory().getContents()) {
+            if (isGateway(item) && getGatewayOwner(item).equals(player.getUniqueId())) {
+                allowedPages = getGatewayAllowedPages(item);
+                break;
+            }
+        }
+        
+        var inv = Bukkit.createInventory(null, 54, ChatColor.BLUE + "Gateway Configuration");
+        
+        // Add page toggle buttons
+        for (int i = 0; i < 10; i++) {
+            int page = i + 1;
+            ItemStack pageButton;
+            if (page <= totalPages) {
+                boolean isAllowed = (allowedPages == -1) || ((allowedPages & (1 << i)) != 0);
+                pageButton = new ItemStack(isAllowed ? Material.LIME_WOOL : Material.RED_WOOL);
+                ItemMeta meta = pageButton.getItemMeta();
+                meta.setDisplayName(ChatColor.WHITE + "Page " + page);
+                meta.setLore(List.of(
+                    isAllowed ? ChatColor.GREEN + "Allowed" : ChatColor.RED + "Denied",
+                    ChatColor.GRAY + "Click to toggle"
+                ));
+                pageButton.setItemMeta(meta);
+            } else {
+                pageButton = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
+                ItemMeta meta = pageButton.getItemMeta();
+                meta.setDisplayName(ChatColor.DARK_GRAY + "Page " + page);
+                meta.setLore(List.of(ChatColor.GRAY + "Not purchased"));
+                pageButton.setItemMeta(meta);
+            }
+            inv.setItem(i, pageButton);
+        }
+        
+        // Add "Allow All" button
+        ItemStack allowAllButton = new ItemStack(Material.EMERALD_BLOCK);
+        ItemMeta allowAllMeta = allowAllButton.getItemMeta();
+        allowAllMeta.setDisplayName(ChatColor.GREEN + "Allow All Pages");
+        allowAllButton.setItemMeta(allowAllMeta);
+        inv.setItem(45, allowAllButton);
+        
+        // Add "Deny All" button
+        ItemStack denyAllButton = new ItemStack(Material.REDSTONE_BLOCK);
+        ItemMeta denyAllMeta = denyAllButton.getItemMeta();
+        denyAllMeta.setDisplayName(ChatColor.RED + "Deny All Pages");
+        denyAllButton.setItemMeta(denyAllMeta);
+        inv.setItem(46, denyAllButton);
+        
+        // Add "Save" button
+        ItemStack saveButton = new ItemStack(Material.BOOK);
+        ItemMeta saveMeta = saveButton.getItemMeta();
+        saveMeta.setDisplayName(ChatColor.GOLD + "Save & Apply to Gateways");
+        saveMeta.setLore(List.of(ChatColor.GRAY + "Click to save and apply to all your gateways"));
+        saveButton.setItemMeta(saveMeta);
+        inv.setItem(49, saveButton);
+        
+        // Store current allowed pages in player's PDC temporarily
+        player.getPersistentDataContainer().set(gatewayAllowedPagesKey, PersistentDataType.INTEGER, allowedPages);
+        
+        player.openInventory(inv);
     }
 
     public void openStorage(Player player, CharmItem charm) {
