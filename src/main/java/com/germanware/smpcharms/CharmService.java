@@ -650,7 +650,8 @@ public final class CharmService {
 
     public void openStorage(Player player, CharmItem charm) {
         int baseSize = charm.level() >= 2 ? STORAGE_LEVEL2_SLOTS : STORAGE_LEVEL1_SLOTS;
-        int size = baseSize + 1; // Add 1 slot for gateway button
+        // Use next multiple of 9 to accommodate gateway button
+        int size = charm.level() >= 2 ? 54 : 36;
         ItemStack[] items = getStoredItems(player);
         CharmStorageHolder holder = new CharmStorageHolder(player.getUniqueId(), baseSize, getCharmMenuTitle() + " Storage");
         var inv = Bukkit.createInventory(holder, size, holder.title());
@@ -658,7 +659,7 @@ public final class CharmService {
         for (int i = 0; i < Math.min(items.length, baseSize); i++) {
             inv.setItem(i, items[i]);
         }
-        // Add gateway button in the last slot
+        // Add gateway button in the last row
         ItemStack gatewayButton = new ItemStack(org.bukkit.Material.ENDER_EYE);
         var meta = gatewayButton.getItemMeta();
         meta.setDisplayName(ChatColor.DARK_PURPLE + "Gateway");
@@ -667,7 +668,7 @@ public final class CharmService {
             ChatColor.GRAY + "Give it to friends to share your storage"
         ));
         gatewayButton.setItemMeta(meta);
-        inv.setItem(size - 1, gatewayButton);
+        inv.setItem(size - 5, gatewayButton); // Place in middle of last row
         player.getPersistentDataContainer().set(storageOpenKey, PersistentDataType.BOOLEAN, true);
         player.openInventory(inv);
     }
@@ -678,7 +679,8 @@ public final class CharmService {
             viewer.sendMessage(ChatColor.RED + "Storage owner is not online.");
             return;
         }
-        int size = baseSize + 1; // Add 1 slot for gateway button
+        // Use next multiple of 9 to accommodate gateway button
+        int size = baseSize == 45 ? 54 : 36;
         ItemStack[] items = getStoredItems(ownerPlayer);
         CharmStorageHolder holder = new CharmStorageHolder(owner, baseSize, getCharmMenuTitle() + " Shared Storage", true);
         var inv = Bukkit.createInventory(holder, size, holder.title());
@@ -686,7 +688,7 @@ public final class CharmService {
         for (int i = 0; i < Math.min(items.length, baseSize); i++) {
             inv.setItem(i, items[i]);
         }
-        // Add gateway button in the last slot (disabled for viewers)
+        // Add gateway button in the last row (disabled for viewers)
         ItemStack gatewayButton = new ItemStack(org.bukkit.Material.ENDER_EYE);
         var meta = gatewayButton.getItemMeta();
         meta.setDisplayName(ChatColor.DARK_PURPLE + "Gateway");
@@ -695,7 +697,7 @@ public final class CharmService {
             ChatColor.RED + "Only the owner can create new gateways"
         ));
         gatewayButton.setItemMeta(meta);
-        inv.setItem(size - 1, gatewayButton);
+        inv.setItem(size - 5, gatewayButton); // Place in middle of last row
         viewer.openInventory(inv);
     }
 

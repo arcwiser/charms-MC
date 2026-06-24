@@ -94,12 +94,34 @@ public final class CharmCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 if (args.length < 2) {
-                    player.sendMessage(ChatColor.RED + "Usage: /charm swap <type>");
+                    player.sendMessage(ChatColor.RED + "Usage: /charm swap <player> <type> or /charm swap <type>");
                     return true;
                 }
-                CharmType type = CharmType.valueOf(args[1].toUpperCase());
-                service.fullySwapCharm(player, type);
-                player.sendMessage(ChatColor.GREEN + "Charm fully swapped to " + type.displayName() + " Lv.1");
+                // Check if first arg is a player name or charm type
+                Player target = plugin.getServer().getPlayer(args[1]);
+                CharmType type;
+                if (target != null && target.isOnline() && args.length >= 3) {
+                    // /charm swap <player> <type>
+                    try {
+                        type = CharmType.valueOf(args[2].toUpperCase());
+                    } catch (IllegalArgumentException e) {
+                        player.sendMessage(ChatColor.RED + "Invalid charm type: " + args[2]);
+                        return true;
+                    }
+                    service.fullySwapCharm(target, type);
+                    player.sendMessage(ChatColor.GREEN + "Swapped " + target.getName() + "'s charm to " + type.displayName() + " Lv.1");
+                    target.sendMessage(ChatColor.YELLOW + player.getName() + " swapped your charm to " + type.displayName() + " Lv.1");
+                } else {
+                    // /charm swap <type> - swap own charm
+                    try {
+                        type = CharmType.valueOf(args[1].toUpperCase());
+                    } catch (IllegalArgumentException e) {
+                        player.sendMessage(ChatColor.RED + "Invalid charm type: " + args[1]);
+                        return true;
+                    }
+                    service.fullySwapCharm(player, type);
+                    player.sendMessage(ChatColor.GREEN + "Charm fully swapped to " + type.displayName() + " Lv.1");
+                }
             }
             case "member" -> {
                 if (!player.hasPermission("smpcharms.admin")) {

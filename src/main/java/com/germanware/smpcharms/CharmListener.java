@@ -1,5 +1,6 @@
 package com.germanware.smpcharms;
 
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.attribute.Attribute;
@@ -416,16 +417,19 @@ public final class CharmListener implements Listener {
         if (!(event.getInventory().getHolder() instanceof CharmStorageHolder holder)) {
             return;
         }
-        // Only save if the player is the owner
-        if (!holder.owner().equals(player.getUniqueId())) {
-            return;
+        // Save changes for both owner and shared users
+        // Get the owner player to save to their data
+        org.bukkit.entity.Player ownerPlayer = Bukkit.getPlayer(holder.owner());
+        if (ownerPlayer != null && ownerPlayer.isOnline()) {
+            // Skip the gateway button slot when saving
+            ItemStack[] contents = event.getInventory().getStorageContents();
+            ItemStack[] storageContents = new ItemStack[holder.size()];
+            System.arraycopy(contents, 0, storageContents, 0, holder.size());
+            service.saveStorageFromInventory(ownerPlayer, storageContents);
         }
-        // Skip the gateway button slot when saving
-        ItemStack[] contents = event.getInventory().getStorageContents();
-        ItemStack[] storageContents = new ItemStack[holder.size()];
-        System.arraycopy(contents, 0, storageContents, 0, holder.size());
-        service.saveStorageFromInventory(player, storageContents);
-        player.getPersistentDataContainer().remove(service.storageOpenKey());
+        if (holder.owner().equals(player.getUniqueId())) {
+            player.getPersistentDataContainer().remove(service.storageOpenKey());
+        }
     }
 
     @EventHandler
@@ -437,11 +441,17 @@ public final class CharmListener implements Listener {
             return;
         }
         
+        // Only handle clicks in the storage inventory (top inventory), not player inventory
+        if (event.getRawSlot() >= event.getInventory().getSize()) {
+            // Click is in player's inventory, allow normal behavior
+            return;
+        }
+        
         int slot = event.getRawSlot();
         int totalSize = event.getInventory().getSize();
         
-        // Check if clicking the gateway button (last slot)
-        if (slot == totalSize - 1) {
+        // Check if clicking the gateway button (middle of last row)
+        if (slot == totalSize - 5) {
             event.setCancelled(true);
             // Only allow owner to create gateway
             if (holder.owner().equals(player.getUniqueId()) && !holder.isShared()) {
@@ -454,12 +464,14 @@ public final class CharmListener implements Listener {
             return;
         }
         
-        // Prevent modifying storage if not the owner
-        if (!holder.owner().equals(player.getUniqueId())) {
+        // Prevent clicking in the last row (reserved for gateway button)
+        if (slot >= holder.size()) {
             event.setCancelled(true);
-            player.sendMessage(ChatColor.RED + "You can only view this shared storage.");
             return;
         }
+        
+        // Allow both owner and shared users to interact with storage
+        // Do not cancel - allow normal inventory operations
     }
 
     @EventHandler
