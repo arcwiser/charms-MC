@@ -87,25 +87,18 @@ public final class CharmListener implements Listener {
         if (service.isUpgradeCatalyst(item) && (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK)) {
             event.setCancelled(true);
             
-            // Use event.getHand() to determine which hand the catalyst is in
-            org.bukkit.inventory.EquipmentSlot catalystHand = event.getHand();
+            ItemStack mainHand = event.getPlayer().getInventory().getItemInMainHand();
+            ItemStack offHand = event.getPlayer().getInventory().getItemInOffHand();
             ItemStack charmToUpgrade = null;
             boolean charmInMain = false;
             
-            if (catalystHand == org.bukkit.inventory.EquipmentSlot.HAND) {
-                // Catalyst in main hand, check off hand for charm
-                ItemStack offHand = event.getPlayer().getInventory().getItemInOffHand();
-                if (offHand != null && service.isCharm(offHand)) {
-                    charmToUpgrade = offHand;
-                    charmInMain = false;
-                }
-            } else if (catalystHand == org.bukkit.inventory.EquipmentSlot.OFF_HAND) {
-                // Catalyst in off hand, check main hand for charm
-                ItemStack mainHand = event.getPlayer().getInventory().getItemInMainHand();
-                if (mainHand != null && service.isCharm(mainHand)) {
-                    charmToUpgrade = mainHand;
-                    charmInMain = true;
-                }
+            // Check both hands for a charm
+            if (mainHand != null && service.isCharm(mainHand)) {
+                charmToUpgrade = mainHand;
+                charmInMain = true;
+            } else if (offHand != null && service.isCharm(offHand)) {
+                charmToUpgrade = offHand;
+                charmInMain = false;
             }
 
             if (charmToUpgrade != null) {
@@ -129,25 +122,18 @@ public final class CharmListener implements Listener {
         if (service.isSwapCatalyst(item) && (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK)) {
             event.setCancelled(true);
             
-            // Use event.getHand() to determine which hand the catalyst is in
-            org.bukkit.inventory.EquipmentSlot catalystHand = event.getHand();
+            ItemStack mainHand = event.getPlayer().getInventory().getItemInMainHand();
+            ItemStack offHand = event.getPlayer().getInventory().getItemInOffHand();
             ItemStack charmToSwap = null;
             boolean charmInMain = false;
             
-            if (catalystHand == org.bukkit.inventory.EquipmentSlot.HAND) {
-                // Catalyst in main hand, check off hand for charm
-                ItemStack offHand = event.getPlayer().getInventory().getItemInOffHand();
-                if (offHand != null && service.isCharm(offHand)) {
-                    charmToSwap = offHand;
-                    charmInMain = false;
-                }
-            } else if (catalystHand == org.bukkit.inventory.EquipmentSlot.OFF_HAND) {
-                // Catalyst in off hand, check main hand for charm
-                ItemStack mainHand = event.getPlayer().getInventory().getItemInMainHand();
-                if (mainHand != null && service.isCharm(mainHand)) {
-                    charmToSwap = mainHand;
-                    charmInMain = true;
-                }
+            // Check both hands for a charm
+            if (mainHand != null && service.isCharm(mainHand)) {
+                charmToSwap = mainHand;
+                charmInMain = true;
+            } else if (offHand != null && service.isCharm(offHand)) {
+                charmToSwap = offHand;
+                charmInMain = false;
             }
 
             if (charmToSwap != null) {
