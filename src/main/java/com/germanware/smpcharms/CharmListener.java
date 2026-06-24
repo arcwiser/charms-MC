@@ -457,6 +457,12 @@ public final class CharmListener implements Listener {
             
             // Previous page button
             if (slot == lastRowStart + 3 && holder.currentPage() > 0) {
+                // Save current page items before navigating
+                ItemStack[] contents = event.getInventory().getStorageContents();
+                ItemStack[] storageContents = new ItemStack[holder.size()];
+                System.arraycopy(contents, 0, storageContents, 0, holder.size());
+                service.saveStorageFromInventory(player, storageContents);
+                
                 player.getPersistentDataContainer().set(service.storageCurrentPageKey(), PersistentDataType.INTEGER, holder.currentPage() - 1);
                 player.closeInventory();
                 CharmItem active = service.getActiveCharm(player);
@@ -468,6 +474,12 @@ public final class CharmListener implements Listener {
             
             // Next page button
             if (slot == lastRowStart + 5 && holder.currentPage() < holder.totalPages() - 1) {
+                // Save current page items before navigating
+                ItemStack[] contents = event.getInventory().getStorageContents();
+                ItemStack[] storageContents = new ItemStack[holder.size()];
+                System.arraycopy(contents, 0, storageContents, 0, holder.size());
+                service.saveStorageFromInventory(player, storageContents);
+                
                 player.getPersistentDataContainer().set(service.storageCurrentPageKey(), PersistentDataType.INTEGER, holder.currentPage() + 1);
                 player.closeInventory();
                 CharmItem active = service.getActiveCharm(player);
