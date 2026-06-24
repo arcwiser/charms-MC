@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Random;
+import java.util.UUID;
 
 public final class CharmService {
     private static final int STARTER_REROLLS = 1;
@@ -46,6 +47,8 @@ public final class CharmService {
     private final NamespacedKey memberTokenKey;
     private final NamespacedKey upgradeCatalystKey;
     private final NamespacedKey swapCatalystKey;
+    private final NamespacedKey gatewayKey;
+    private final NamespacedKey gatewayOwnerKey;
 
     public CharmService(SMPCharmsPlugin plugin) {
         this.plugin = plugin;
@@ -63,6 +66,8 @@ public final class CharmService {
         this.memberTokenKey = plugin.key("member_token");
         this.upgradeCatalystKey = plugin.key("upgrade_catalyst");
         this.swapCatalystKey = plugin.key("swap_catalyst");
+        this.gatewayKey = plugin.key("gateway_token");
+        this.gatewayOwnerKey = plugin.key("gateway_owner");
     }
 
     public void tickOnlinePlayers() {
@@ -232,11 +237,45 @@ public final class CharmService {
             lore.add(ChatColor.YELLOW + "Use your normal crafting recipe to swap a charm");
         } else {
             lore.add(ChatColor.GRAY + "Right-click while holding a charm to swap it");
+            lore.add(ChatColor.GRAY + "Right-click a player to swap their charm");
         }
         meta.setLore(lore);
         meta.getPersistentDataContainer().set(swapCatalystKey, PersistentDataType.BYTE, (byte) 1);
         item.setItemMeta(meta);
         return item;
+    }
+
+    public ItemStack createGateway(UUID owner) {
+        ItemStack item = new ItemStack(Material.ENDER_EYE);
+        ItemMeta meta = item.getItemMeta();
+        meta.setDisplayName(ChatColor.DARK_PURPLE + "Storage Gateway");
+        meta.setLore(List.of(
+            ChatColor.GRAY + "Right-click to access shared storage",
+            ChatColor.GRAY + "Owner: " + Bukkit.getOfflinePlayer(owner).getName()
+        ));
+        meta.getPersistentDataContainer().set(gatewayKey, PersistentDataType.BYTE, (byte) 1);
+        meta.getPersistentDataContainer().set(gatewayOwnerKey, PersistentDataType.STRING, owner.toString());
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    public boolean isGateway(ItemStack item) {
+        return item != null && item.hasItemMeta() && item.getItemMeta().getPersistentDataContainer().has(gatewayKey, PersistentDataType.BYTE);
+    }
+
+    public UUID getGatewayOwner(ItemStack item) {
+        if (!isGateway(item)) {
+            return null;
+        }
+        String ownerString = item.getItemMeta().getPersistentDataContainer().get(gatewayOwnerKey, PersistentDataType.STRING);
+        if (ownerString == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(ownerString);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     public boolean isUpgradeCatalyst(ItemStack item) {
@@ -610,16 +649,54 @@ public final class CharmService {
     }
 
     public void openStorage(Player player, CharmItem charm) {
-        int size = charm.level() >= 2 ? STORAGE_LEVEL2_SLOTS : STORAGE_LEVEL1_SLOTS;
+        int baseSize = charm.level() >= 2 ? STORAGE_LEVEL2_SLOTS : STORAGE_LEVEL1_SLOTS;
+        int size = baseSize + 1; // Add 1 slot for gateway button
         ItemStack[] items = getStoredItems(player);
-        CharmStorageHolder holder = new CharmStorageHolder(player.getUniqueId(), size, getCharmMenuTitle() + " Storage");
+        CharmStorageHolder holder = new CharmStorageHolder(player.getUniqueId(), baseSize, getCharmMenuTitle() + " Storage");
         var inv = Bukkit.createInventory(holder, size, holder.title());
         holder.bind(inv);
-        for (int i = 0; i < Math.min(items.length, size); i++) {
+        for (int i = 0; i < Math.min(items.length, baseSize); i++) {
             inv.setItem(i, items[i]);
         }
+        // Add gateway button in the last slot
+        ItemStack gatewayButton = new ItemStack(org.bukkit.Material.ENDER_EYE);
+        var meta = gatewayButton.getItemMeta();
+        meta.setDisplayName(ChatColor.DARK_PURPLE + "Gateway");
+        meta.setLore(List.of(
+            ChatColor.GRAY + "Click to create a gateway item",
+            ChatColor.GRAY + "Give it to friends to share your storage"
+        ));
+        gatewayButton.setItemMeta(meta);
+        inv.setItem(size - 1, gatewayButton);
         player.getPersistentDataContainer().set(storageOpenKey, PersistentDataType.BOOLEAN, true);
         player.openInventory(inv);
+    }
+
+    public void openSharedStorage(Player viewer, UUID owner, int baseSize) {
+        org.bukkit.entity.Player ownerPlayer = Bukkit.getPlayer(owner);
+        if (ownerPlayer == null || !ownerPlayer.isOnline()) {
+            viewer.sendMessage(ChatColor.RED + "Storage owner is not online.");
+            return;
+        }
+        int size = baseSize + 1; // Add 1 slot for gateway button
+        ItemStack[] items = getStoredItems(ownerPlayer);
+        CharmStorageHolder holder = new CharmStorageHolder(owner, baseSize, getCharmMenuTitle() + " Shared Storage", true);
+        var inv = Bukkit.createInventory(holder, size, holder.title());
+        holder.bind(inv);
+        for (int i = 0; i < Math.min(items.length, baseSize); i++) {
+            inv.setItem(i, items[i]);
+        }
+        // Add gateway button in the last slot (disabled for viewers)
+        ItemStack gatewayButton = new ItemStack(org.bukkit.Material.ENDER_EYE);
+        var meta = gatewayButton.getItemMeta();
+        meta.setDisplayName(ChatColor.DARK_PURPLE + "Gateway");
+        meta.setLore(List.of(
+            ChatColor.GRAY + "Shared storage from " + Bukkit.getOfflinePlayer(owner).getName(),
+            ChatColor.RED + "Only the owner can create new gateways"
+        ));
+        gatewayButton.setItemMeta(meta);
+        inv.setItem(size - 1, gatewayButton);
+        viewer.openInventory(inv);
     }
 
     public void saveStorageFromInventory(Player player, ItemStack[] contents) {

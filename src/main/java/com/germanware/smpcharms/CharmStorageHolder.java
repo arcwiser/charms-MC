@@ -9,12 +9,18 @@ public final class CharmStorageHolder implements InventoryHolder {
     private final UUID owner;
     private final int size;
     private final String title;
+    private final boolean isShared;
     private Inventory inventory;
 
     public CharmStorageHolder(UUID owner, int size, String title) {
+        this(owner, size, title, false);
+    }
+
+    public CharmStorageHolder(UUID owner, int size, String title, boolean isShared) {
         this.owner = owner;
         this.size = size;
         this.title = title;
+        this.isShared = isShared;
     }
 
     public UUID owner() {
@@ -27,6 +33,10 @@ public final class CharmStorageHolder implements InventoryHolder {
 
     public String title() {
         return title;
+    }
+
+    public boolean isShared() {
+        return isShared;
     }
 
     public void bind(Inventory inventory) {

@@ -28,6 +28,7 @@ import org.bukkit.inventory.InventoryView;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.Random;
+import java.util.UUID;
 
 public final class CharmListener implements Listener {
     private final SMPCharmsPlugin plugin;
@@ -113,6 +114,27 @@ public final class CharmListener implements Listener {
         if (service.isSwapCatalyst(item) && (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK)) {
             event.setCancelled(true);
             
+            // Check if right-clicking a player
+            if (event.getClickedBlock() == null && event.getAction() == Action.RIGHT_CLICK_AIR) {
+                // Raycast to find if clicking on a player
+                org.bukkit.util.RayTraceResult rayTrace = event.getPlayer().rayTraceEntities(5);
+                if (rayTrace != null && rayTrace.getHitEntity() instanceof Player target) {
+                    CharmItem targetCharm = service.getActiveCharm(target);
+                    if (targetCharm != null) {
+                        CharmItem newCharm = new CharmItem(service.pickRandomCharmType(), 1);
+                        service.setActiveCharm(target, newCharm);
+                        target.getInventory().setItemInMainHand(service.createCharm(newCharm.type(), 1));
+                        event.getItem().setAmount(event.getItem().getAmount() - 1);
+                        event.getPlayer().sendMessage(ChatColor.GREEN + "Swapped " + target.getName() + "'s charm to " + newCharm.type().displayName() + " Lv.1");
+                        target.sendMessage(ChatColor.YELLOW + event.getPlayer().getName() + " swapped your charm to " + newCharm.type().displayName() + " Lv.1");
+                        return;
+                    } else {
+                        event.getPlayer().sendMessage(ChatColor.RED + target.getName() + " has no active charm.");
+                        return;
+                    }
+                }
+            }
+            
             // Check the other hand for a charm (not the hand holding the catalyst)
             ItemStack otherHand = event.getHand() == org.bukkit.inventory.EquipmentSlot.HAND 
                 ? event.getPlayer().getInventory().getItemInOffHand()
@@ -131,6 +153,20 @@ public final class CharmListener implements Listener {
                 return;
             }
             event.getPlayer().sendMessage(ChatColor.RED + "Hold a charm in your other hand to swap it.");
+            return;
+        }
+
+        if (service.isGateway(item) && (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK)) {
+            event.setCancelled(true);
+            UUID owner = service.getGatewayOwner(item);
+            if (owner != null) {
+                CharmItem active = service.getActiveCharm(event.getPlayer());
+                int baseSize = 27; // Default to level 1 size
+                if (active != null && active.type() == CharmType.STORAGE) {
+                    baseSize = active.level() >= 2 ? 45 : 27;
+                }
+                service.openSharedStorage(event.getPlayer(), owner, baseSize);
+            }
             return;
         }
 
@@ -380,11 +416,50 @@ public final class CharmListener implements Listener {
         if (!(event.getInventory().getHolder() instanceof CharmStorageHolder holder)) {
             return;
         }
+        // Only save if the player is the owner
         if (!holder.owner().equals(player.getUniqueId())) {
             return;
         }
-        service.saveStorageFromInventory(player, event.getInventory().getStorageContents());
+        // Skip the gateway button slot when saving
+        ItemStack[] contents = event.getInventory().getStorageContents();
+        ItemStack[] storageContents = new ItemStack[holder.size()];
+        System.arraycopy(contents, 0, storageContents, 0, holder.size());
+        service.saveStorageFromInventory(player, storageContents);
         player.getPersistentDataContainer().remove(service.storageOpenKey());
+    }
+
+    @EventHandler
+    public void onStorageClick(InventoryClickEvent event) {
+        if (!(event.getInventory().getHolder() instanceof CharmStorageHolder holder)) {
+            return;
+        }
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
+        
+        int slot = event.getRawSlot();
+        int totalSize = event.getInventory().getSize();
+        
+        // Check if clicking the gateway button (last slot)
+        if (slot == totalSize - 1) {
+            event.setCancelled(true);
+            // Only allow owner to create gateway
+            if (holder.owner().equals(player.getUniqueId()) && !holder.isShared()) {
+                ItemStack gateway = service.createGateway(holder.owner());
+                player.getInventory().addItem(gateway);
+                player.sendMessage(ChatColor.GREEN + "Gateway created! Give it to friends to share your storage.");
+            } else {
+                player.sendMessage(ChatColor.RED + "Only the storage owner can create gateways.");
+            }
+            return;
+        }
+        
+        // Prevent modifying storage if not the owner
+        if (!holder.owner().equals(player.getUniqueId())) {
+            event.setCancelled(true);
+            player.sendMessage(ChatColor.RED + "You can only view this shared storage.");
+            return;
+        }
     }
 
     @EventHandler
