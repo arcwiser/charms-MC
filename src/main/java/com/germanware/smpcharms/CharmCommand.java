@@ -160,6 +160,53 @@ public final class CharmCommand implements CommandExecutor, TabCompleter {
                 player.getInventory().addItem(service.createSwapCatalyst());
                 player.sendMessage(ChatColor.GREEN + "Swap catalyst given.");
             }
+            case "gateway" -> {
+                if (args.length < 2) {
+                    player.sendMessage(ChatColor.RED + "Usage: /charm gateway <allow|deny> <page>");
+                    return true;
+                }
+                ItemStack gatewayItem = player.getInventory().getItemInMainHand();
+                if (!service.isGateway(gatewayItem)) {
+                    player.sendMessage(ChatColor.RED + "Hold a gateway item in your main hand.");
+                    return true;
+                }
+                UUID gatewayOwner = service.getGatewayOwner(gatewayItem);
+                if (!player.getUniqueId().equals(gatewayOwner)) {
+                    player.sendMessage(ChatColor.RED + "You can only configure your own gateways.");
+                    return true;
+                }
+                String action = args[1].toLowerCase();
+                int page;
+                try {
+                    page = Integer.parseInt(args[2]);
+                } catch (NumberFormatException e) {
+                    player.sendMessage(ChatColor.RED + "Invalid page number.");
+                    return true;
+                }
+                if (page < 1 || page > 10) {
+                    player.sendMessage(ChatColor.RED + "Page must be between 1 and 10.");
+                    return true;
+                }
+                int allowedPages = service.getGatewayAllowedPages(gatewayItem);
+                if (allowedPages == -1) {
+                    allowedPages = 0; // Start with none if previously all
+                }
+                int pageBit = 1 << (page - 1);
+                if (action.equals("allow")) {
+                    allowedPages |= pageBit;
+                    player.sendMessage(ChatColor.GREEN + "Allowed access to page " + page);
+                } else if (action.equals("deny")) {
+                    allowedPages &= ~pageBit;
+                    player.sendMessage(ChatColor.GREEN + "Denied access to page " + page);
+                } else if (action.equals("all")) {
+                    allowedPages = -1;
+                    player.sendMessage(ChatColor.GREEN + "Allowed access to all pages");
+                } else {
+                    player.sendMessage(ChatColor.RED + "Usage: /charm gateway <allow|deny|all> <page>");
+                    return true;
+                }
+                service.setGatewayAllowedPages(gatewayItem, allowedPages);
+            }
             case "reload" -> {
                 if (!player.hasPermission("smpcharms.admin")) {
                     noPerm(player);
@@ -256,6 +303,7 @@ public final class CharmCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(ChatColor.GRAY + "/charm menu");
         player.sendMessage(ChatColor.GRAY + "/charm recipe");
         player.sendMessage(ChatColor.GRAY + "/charm storage");
+        player.sendMessage(ChatColor.GRAY + "/charm gateway <allow|deny|all> <page>");
         player.sendMessage(ChatColor.GRAY + "/trade <player|accept|deny>");
         player.sendMessage(ChatColor.GRAY + "/charm give <type> [level] (admin)");
         player.sendMessage(ChatColor.GRAY + "/charm swap <type> (admin)");
@@ -316,7 +364,7 @@ public final class CharmCommand implements CommandExecutor, TabCompleter {
             return List.of();
         }
         if (args.length == 1) {
-            return filter(args[0], List.of("help", "list", "info", "reroll", "menu", "recipe", "storage", "give", "swap", "member", "rerollall", "giveupgradeitem", "giveswapitem", "reload"));
+            return filter(args[0], List.of("help", "list", "info", "reroll", "menu", "recipe", "storage", "gateway", "give", "swap", "member", "rerollall", "giveupgradeitem", "giveswapitem", "reload"));
         }
         if (args.length == 2 && Arrays.asList("give", "swap").contains(args[0].toLowerCase())) {
             List<String> names = Arrays.stream(CharmType.values()).map(Enum::name).toList();

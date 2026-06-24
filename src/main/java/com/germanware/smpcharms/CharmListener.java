@@ -449,28 +449,107 @@ public final class CharmListener implements Listener {
         
         int slot = event.getRawSlot();
         int totalSize = event.getInventory().getSize();
+        int lastRowStart = totalSize - 9;
         
-        // Check if clicking the gateway button (middle of last row)
-        if (slot == totalSize - 5) {
+        // Check if clicking buttons in the last row
+        if (slot >= lastRowStart) {
             event.setCancelled(true);
-            // Only allow owner to create gateway
-            if (holder.owner().equals(player.getUniqueId()) && !holder.isShared()) {
-                ItemStack gateway = service.createGateway(holder.owner());
-                player.getInventory().addItem(gateway);
-                player.sendMessage(ChatColor.GREEN + "Gateway created! Give it to friends to share your storage.");
-            } else {
-                player.sendMessage(ChatColor.RED + "Only the storage owner can create gateways.");
+            
+            // Previous page button
+            if (slot == lastRowStart + 3 && holder.currentPage() > 0) {
+                player.getPersistentDataContainer().set(service.storageCurrentPageKey(), PersistentDataType.INTEGER, holder.currentPage() - 1);
+                player.closeInventory();
+                CharmItem active = service.getActiveCharm(player);
+                if (active != null && active.type() == CharmType.STORAGE) {
+                    service.openStorage(player, active);
+                }
+                return;
             }
+            
+            // Next page button
+            if (slot == lastRowStart + 5 && holder.currentPage() < holder.totalPages() - 1) {
+                player.getPersistentDataContainer().set(service.storageCurrentPageKey(), PersistentDataType.INTEGER, holder.currentPage() + 1);
+                player.closeInventory();
+                CharmItem active = service.getActiveCharm(player);
+                if (active != null && active.type() == CharmType.STORAGE) {
+                    service.openStorage(player, active);
+                }
+                return;
+            }
+            
+            // Gateway button
+            if (slot == lastRowStart + 6) {
+                if (holder.owner().equals(player.getUniqueId()) && !holder.isShared()) {
+                    ItemStack gateway = service.createGateway(holder.owner());
+                    player.getInventory().addItem(gateway);
+                    player.sendMessage(ChatColor.GREEN + "Gateway created! Give it to friends to share your storage.");
+                } else {
+                    player.sendMessage(ChatColor.RED + "Only the storage owner can create gateways.");
+                }
+                return;
+            }
+            
+            // Buy page button
+            if (slot == lastRowStart + 7) {
+                if (holder.owner().equals(player.getUniqueId()) && holder.totalPages() < 10) {
+                    // Check if player has required items
+                    int netheriteCount = 0;
+                    int diamondBlockCount = 0;
+                    for (ItemStack item : player.getInventory().getContents()) {
+                        if (item != null) {
+                            if (item.getType() == Material.NETHERITE_INGOT) {
+                                netheriteCount += item.getAmount();
+                            } else if (item.getType() == Material.DIAMOND_BLOCK) {
+                                diamondBlockCount += item.getAmount();
+                            }
+                        }
+                    }
+                    
+                    if (netheriteCount >= 3 && diamondBlockCount >= 1) {
+                        // Remove items
+                        int remainingNetherite = 3;
+                        int remainingDiamondBlock = 1;
+                        for (ItemStack item : player.getInventory().getContents()) {
+                            if (item != null && remainingNetherite > 0 && item.getType() == Material.NETHERITE_INGOT) {
+                                int toRemove = Math.min(item.getAmount(), remainingNetherite);
+                                item.setAmount(item.getAmount() - toRemove);
+                                remainingNetherite -= toRemove;
+                            }
+                        }
+                        for (ItemStack item : player.getInventory().getContents()) {
+                            if (item != null && remainingDiamondBlock > 0 && item.getType() == Material.DIAMOND_BLOCK) {
+                                int toRemove = Math.min(item.getAmount(), remainingDiamondBlock);
+                                item.setAmount(item.getAmount() - toRemove);
+                                remainingDiamondBlock -= toRemove;
+                            }
+                        }
+                        
+                        // Add page
+                        int newPages = holder.totalPages() + 1;
+                        player.getPersistentDataContainer().set(service.storagePagesKey(), PersistentDataType.INTEGER, newPages);
+                        player.sendMessage(ChatColor.GREEN + "Purchased a new storage page! Total pages: " + newPages);
+                        player.closeInventory();
+                        CharmItem active = service.getActiveCharm(player);
+                        if (active != null && active.type() == CharmType.STORAGE) {
+                            service.openStorage(player, active);
+                        }
+                    } else {
+                        player.sendMessage(ChatColor.RED + "You need 3 Netherite Ingots and 1 Diamond Block to buy a page.");
+                    }
+                }
+                return;
+            }
+            
+            // Page indicator - do nothing
+            if (slot == lastRowStart + 4) {
+                return;
+            }
+            
+            // Other slots in last row are blocked
             return;
         }
         
-        // Prevent clicking in the last row (reserved for gateway button)
-        if (slot >= holder.size()) {
-            event.setCancelled(true);
-            return;
-        }
-        
-        // Allow both owner and shared users to interact with storage
+        // Allow both owner and shared users to modify storage
         // Do not cancel - allow normal inventory operations
     }
 

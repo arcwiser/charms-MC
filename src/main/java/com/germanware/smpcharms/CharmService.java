@@ -49,6 +49,10 @@ public final class CharmService {
     private final NamespacedKey swapCatalystKey;
     private final NamespacedKey gatewayKey;
     private final NamespacedKey gatewayOwnerKey;
+    private final NamespacedKey storagePagesKey;
+    private final NamespacedKey storageCurrentPageKey;
+    private final NamespacedKey gatewayAllowedPagesKey;
+    private final NamespacedKey storageIdKey;
 
     public CharmService(SMPCharmsPlugin plugin) {
         this.plugin = plugin;
@@ -68,6 +72,10 @@ public final class CharmService {
         this.swapCatalystKey = plugin.key("swap_catalyst");
         this.gatewayKey = plugin.key("gateway_token");
         this.gatewayOwnerKey = plugin.key("gateway_owner");
+        this.storagePagesKey = plugin.key("storage_pages");
+        this.storageCurrentPageKey = plugin.key("storage_current_page");
+        this.gatewayAllowedPagesKey = plugin.key("gateway_allowed_pages");
+        this.storageIdKey = plugin.key("storage_id");
     }
 
     public void tickOnlinePlayers() {
@@ -98,6 +106,13 @@ public final class CharmService {
         pdc.set(typeKey, PersistentDataType.STRING, type.name());
         pdc.set(levelKey, PersistentDataType.INTEGER, level);
         pdc.set(charmTokenKey, PersistentDataType.BYTE, (byte) 1);
+        
+        // Assign unique storage ID for storage charms
+        if (type == CharmType.STORAGE) {
+            String storageId = UUID.randomUUID().toString();
+            pdc.set(storageIdKey, PersistentDataType.STRING, storageId);
+        }
+        
         item.setItemMeta(meta);
         return item;
     }
@@ -249,12 +264,29 @@ public final class CharmService {
         ItemStack item = new ItemStack(Material.ENDER_EYE);
         ItemMeta meta = item.getItemMeta();
         meta.setDisplayName(ChatColor.DARK_PURPLE + "Storage Gateway");
+        
+        // Get the storage ID from the owner's active storage charm
+        String storageId = null;
+        Player ownerPlayer = Bukkit.getPlayer(owner);
+        if (ownerPlayer != null && ownerPlayer.isOnline()) {
+            storageId = getStorageId(ownerPlayer);
+        }
+        
+        if (storageId == null) {
+            storageId = getStorageIdOffline(owner);
+        }
+        
+        if (storageId == null) {
+            storageId = owner.toString(); // Fallback to owner UUID
+        }
+        
         meta.setLore(List.of(
             ChatColor.GRAY + "Right-click to access shared storage",
             ChatColor.GRAY + "Owner: " + Bukkit.getOfflinePlayer(owner).getName()
         ));
         meta.getPersistentDataContainer().set(gatewayKey, PersistentDataType.BYTE, (byte) 1);
         meta.getPersistentDataContainer().set(gatewayOwnerKey, PersistentDataType.STRING, owner.toString());
+        meta.getPersistentDataContainer().set(storageIdKey, PersistentDataType.STRING, storageId);
         item.setItemMeta(meta);
         return item;
     }
@@ -276,6 +308,30 @@ public final class CharmService {
         } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    public int getGatewayAllowedPages(ItemStack item) {
+        if (!isGateway(item)) {
+            return -1;
+        }
+        String allowedPagesStr = item.getItemMeta().getPersistentDataContainer().get(gatewayAllowedPagesKey, PersistentDataType.STRING);
+        if (allowedPagesStr == null) {
+            return -1; // Default to all pages
+        }
+        try {
+            return Integer.parseInt(allowedPagesStr);
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    public void setGatewayAllowedPages(ItemStack item, int allowedPages) {
+        if (!isGateway(item)) {
+            return;
+        }
+        ItemMeta meta = item.getItemMeta();
+        meta.getPersistentDataContainer().set(gatewayAllowedPagesKey, PersistentDataType.STRING, String.valueOf(allowedPages));
+        item.setItemMeta(meta);
     }
 
     public boolean isUpgradeCatalyst(ItemStack item) {
@@ -648,56 +704,324 @@ public final class CharmService {
         }
     }
 
+    public ItemStack[] getStoredItemsOffline(UUID owner) {
+        java.io.File dataFile = new java.io.File(plugin.getDataFolder(), "storage_" + owner.toString() + ".yml");
+        if (!dataFile.exists()) {
+            return new ItemStack[0];
+        }
+        try {
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(dataFile);
+            int size = config.getInt("size", 0);
+            ItemStack[] items = new ItemStack[size];
+            for (int i = 0; i < size; i++) {
+                if (config.contains("items." + i)) {
+                    items[i] = config.getItemStack("items." + i);
+                }
+            }
+            return items;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to load offline storage data for " + owner + ": " + e.getMessage());
+            e.printStackTrace();
+        }
+        return new ItemStack[0];
+    }
+
+    public void saveStorageToFile(UUID owner, ItemStack[] items, int size) {
+        try {
+            if (!plugin.getDataFolder().exists()) {
+                plugin.getDataFolder().mkdirs();
+            }
+            java.io.File dataFile = new java.io.File(plugin.getDataFolder(), "storage_" + owner.toString() + ".yml");
+            YamlConfiguration config = new YamlConfiguration();
+            config.set("size", size);
+            for (int i = 0; i < items.length; i++) {
+                if (items[i] != null && !items[i].getType().isAir()) {
+                    config.set("items." + i, items[i]);
+                }
+            }
+            config.save(dataFile);
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to save offline storage data for " + owner + ": " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    public void saveStorageToFile(String storageId, ItemStack[] items, int size) {
+        try {
+            if (!plugin.getDataFolder().exists()) {
+                plugin.getDataFolder().mkdirs();
+            }
+            java.io.File dataFile = new java.io.File(plugin.getDataFolder(), "storage_" + storageId + ".yml");
+            YamlConfiguration config = new YamlConfiguration();
+            config.set("size", size);
+            for (int i = 0; i < items.length; i++) {
+                if (items[i] != null && !items[i].getType().isAir()) {
+                    config.set("items." + i, items[i]);
+                }
+            }
+            config.save(dataFile);
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to save offline storage data for " + storageId + ": " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    public int getStoragePages(Player player) {
+        Integer pages = player.getPersistentDataContainer().get(storagePagesKey, PersistentDataType.INTEGER);
+        return pages == null ? 1 : pages;
+    }
+
+    public int getStoragePagesOffline(UUID owner) {
+        java.io.File dataFile = new java.io.File(plugin.getDataFolder(), "storage_" + owner.toString() + ".yml");
+        if (!dataFile.exists()) {
+            return 1;
+        }
+        try {
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(dataFile);
+            return config.getInt("pages", 1);
+        } catch (Exception e) {
+            return 1;
+        }
+    }
+
+    public ItemStack[] getStoredItemsForPage(Player player, int page, int baseSize) {
+        String raw = player.getPersistentDataContainer().get(storageDataKey, PersistentDataType.STRING);
+        if (raw == null || raw.isBlank()) {
+            return new ItemStack[baseSize];
+        }
+        try {
+            byte[] data = Base64.getDecoder().decode(raw);
+            java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(data);
+            java.io.InputStreamReader reader = new java.io.InputStreamReader(bais);
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(reader);
+            int size = config.getInt("size", 0);
+            ItemStack[] items = new ItemStack[size];
+            for (int i = 0; i < size; i++) {
+                if (config.contains("items." + i)) {
+                    items[i] = config.getItemStack("items." + i);
+                }
+            }
+            // Extract items for the specific page
+            int pageStart = page * baseSize;
+            ItemStack[] pageItems = new ItemStack[baseSize];
+            for (int i = 0; i < baseSize && (pageStart + i) < items.length; i++) {
+                pageItems[i] = items[pageStart + i];
+            }
+            return pageItems;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to load storage charm data for " + player.getName() + ": " + e.getMessage());
+            e.printStackTrace();
+        }
+        return new ItemStack[baseSize];
+    }
+
+    public ItemStack[] getStoredItemsOfflineForPage(UUID owner, int page, int baseSize) {
+        // Try to get storage ID first
+        String storageId = getStorageIdOffline(owner);
+        if (storageId != null) {
+            return getStoredItemsByIdForPage(storageId, page, baseSize);
+        }
+        
+        // Fallback to owner UUID
+        java.io.File dataFile = new java.io.File(plugin.getDataFolder(), "storage_" + owner.toString() + ".yml");
+        if (!dataFile.exists()) {
+            return new ItemStack[baseSize];
+        }
+        try {
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(dataFile);
+            int size = config.getInt("size", 0);
+            ItemStack[] items = new ItemStack[size];
+            for (int i = 0; i < size; i++) {
+                if (config.contains("items." + i)) {
+                    items[i] = config.getItemStack("items." + i);
+                }
+            }
+            // Extract items for the specific page
+            int pageStart = page * baseSize;
+            ItemStack[] pageItems = new ItemStack[baseSize];
+            for (int i = 0; i < baseSize && (pageStart + i) < items.length; i++) {
+                pageItems[i] = items[pageStart + i];
+            }
+            return pageItems;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to load offline storage data for " + owner + ": " + e.getMessage());
+            e.printStackTrace();
+        }
+        return new ItemStack[baseSize];
+    }
+
+    public ItemStack[] getStoredItemsByIdForPage(String storageId, int page, int baseSize) {
+        java.io.File dataFile = new java.io.File(plugin.getDataFolder(), "storage_" + storageId + ".yml");
+        if (!dataFile.exists()) {
+            return new ItemStack[baseSize];
+        }
+        try {
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(dataFile);
+            int size = config.getInt("size", 0);
+            ItemStack[] items = new ItemStack[size];
+            for (int i = 0; i < size; i++) {
+                if (config.contains("items." + i)) {
+                    items[i] = config.getItemStack("items." + i);
+                }
+            }
+            // Extract items for the specific page
+            int pageStart = page * baseSize;
+            ItemStack[] pageItems = new ItemStack[baseSize];
+            for (int i = 0; i < baseSize && (pageStart + i) < items.length; i++) {
+                pageItems[i] = items[pageStart + i];
+            }
+            return pageItems;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to load offline storage data for " + storageId + ": " + e.getMessage());
+            e.printStackTrace();
+        }
+        return new ItemStack[baseSize];
+    }
+
+    public void setStoredItemsForPage(Player player, int page, ItemStack[] items, int baseSize) {
+        // Load all existing items
+        String raw = player.getPersistentDataContainer().get(storageDataKey, PersistentDataType.STRING);
+        ItemStack[] allItems = new ItemStack[baseSize * getStoragePages(player)];
+        
+        if (raw != null && !raw.isBlank()) {
+            try {
+                byte[] data = Base64.getDecoder().decode(raw);
+                java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(data);
+                java.io.InputStreamReader reader = new java.io.InputStreamReader(bais);
+                YamlConfiguration config = YamlConfiguration.loadConfiguration(reader);
+                int size = config.getInt("size", 0);
+                for (int i = 0; i < size; i++) {
+                    if (config.contains("items." + i)) {
+                        allItems[i] = config.getItemStack("items." + i);
+                    }
+                }
+            } catch (Exception e) {
+                plugin.getLogger().warning("Failed to load storage charm data for " + player.getName() + ": " + e.getMessage());
+            }
+        }
+        
+        // Update the specific page
+        int pageStart = page * baseSize;
+        for (int i = 0; i < items.length; i++) {
+            allItems[pageStart + i] = items[i];
+        }
+        
+        // Save all items
+        setStoredItems(player, allItems, allItems.length);
+    }
+
+    public void addStorageButtons(org.bukkit.inventory.Inventory inv, int size, int currentPage, int totalPages, Player player, boolean isOwner) {
+        int lastRowStart = size - 9;
+        
+        // Previous page button
+        if (currentPage > 0) {
+            ItemStack prevButton = new ItemStack(org.bukkit.Material.ARROW);
+            ItemMeta prevMeta = prevButton.getItemMeta();
+            prevMeta.setDisplayName(ChatColor.YELLOW + "Previous Page");
+            prevButton.setItemMeta(prevMeta);
+            inv.setItem(lastRowStart + 3, prevButton);
+        }
+        
+        // Next page button
+        if (currentPage < totalPages - 1) {
+            ItemStack nextButton = new ItemStack(org.bukkit.Material.ARROW);
+            ItemMeta nextMeta = nextButton.getItemMeta();
+            nextMeta.setDisplayName(ChatColor.YELLOW + "Next Page");
+            nextButton.setItemMeta(nextMeta);
+            inv.setItem(lastRowStart + 5, nextButton);
+        }
+        
+        // Page indicator
+        ItemStack pageIndicator = new ItemStack(org.bukkit.Material.PAPER);
+        ItemMeta pageMeta = pageIndicator.getItemMeta();
+        pageMeta.setDisplayName(ChatColor.WHITE + "Page " + (currentPage + 1) + "/" + totalPages);
+        pageIndicator.setItemMeta(pageMeta);
+        inv.setItem(lastRowStart + 4, pageIndicator);
+        
+        // Gateway button (owner only)
+        if (isOwner) {
+            ItemStack gatewayButton = new ItemStack(org.bukkit.Material.ENDER_EYE);
+            ItemMeta gatewayMeta = gatewayButton.getItemMeta();
+            gatewayMeta.setDisplayName(ChatColor.DARK_PURPLE + "Gateway");
+            gatewayMeta.setLore(List.of(
+                ChatColor.GRAY + "Click to create a gateway item",
+                ChatColor.GRAY + "Give it to friends to share your storage"
+            ));
+            gatewayButton.setItemMeta(gatewayMeta);
+            inv.setItem(lastRowStart + 6, gatewayButton);
+        }
+        
+        // Buy page button (owner only)
+        if (isOwner && totalPages < 10) { // Max 10 pages
+            ItemStack buyButton = new ItemStack(org.bukkit.Material.GOLD_BLOCK);
+            ItemMeta buyMeta = buyButton.getItemMeta();
+            buyMeta.setDisplayName(ChatColor.GREEN + "Buy New Page");
+            buyMeta.setLore(List.of(
+                ChatColor.GRAY + "Cost: 3 Netherite Ingots + 1 Diamond Block",
+                ChatColor.GRAY + "Click to purchase"
+            ));
+            buyButton.setItemMeta(buyMeta);
+            inv.setItem(lastRowStart + 7, buyButton);
+        }
+    }
+
     public void openStorage(Player player, CharmItem charm) {
         int baseSize = charm.level() >= 2 ? STORAGE_LEVEL2_SLOTS : STORAGE_LEVEL1_SLOTS;
-        // Use next multiple of 9 to accommodate gateway button
+        int totalPages = getStoragePages(player);
+        Integer currentPageObj = player.getPersistentDataContainer().get(storageCurrentPageKey, PersistentDataType.INTEGER);
+        int currentPage = (currentPageObj == null || currentPageObj < 0 || currentPageObj >= totalPages) ? 0 : currentPageObj;
+        
+        // Use next multiple of 9 to accommodate buttons
         int size = charm.level() >= 2 ? 54 : 36;
-        ItemStack[] items = getStoredItems(player);
-        CharmStorageHolder holder = new CharmStorageHolder(player.getUniqueId(), baseSize, getCharmMenuTitle() + " Storage");
+        ItemStack[] items = getStoredItemsForPage(player, currentPage, baseSize);
+        CharmStorageHolder holder = new CharmStorageHolder(player.getUniqueId(), baseSize, getCharmMenuTitle() + " Storage", false, currentPage, totalPages, -1);
         var inv = Bukkit.createInventory(holder, size, holder.title());
         holder.bind(inv);
         for (int i = 0; i < Math.min(items.length, baseSize); i++) {
             inv.setItem(i, items[i]);
         }
-        // Add gateway button in the last row
-        ItemStack gatewayButton = new ItemStack(org.bukkit.Material.ENDER_EYE);
-        var meta = gatewayButton.getItemMeta();
-        meta.setDisplayName(ChatColor.DARK_PURPLE + "Gateway");
-        meta.setLore(List.of(
-            ChatColor.GRAY + "Click to create a gateway item",
-            ChatColor.GRAY + "Give it to friends to share your storage"
-        ));
-        gatewayButton.setItemMeta(meta);
-        inv.setItem(size - 5, gatewayButton); // Place in middle of last row
+        
+        // Add buttons in the last row
+        addStorageButtons(inv, size, currentPage, totalPages, player, true);
+        
         player.getPersistentDataContainer().set(storageOpenKey, PersistentDataType.BOOLEAN, true);
         player.openInventory(inv);
     }
 
     public void openSharedStorage(Player viewer, UUID owner, int baseSize) {
-        org.bukkit.entity.Player ownerPlayer = Bukkit.getPlayer(owner);
-        if (ownerPlayer == null || !ownerPlayer.isOnline()) {
-            viewer.sendMessage(ChatColor.RED + "Storage owner is not online.");
-            return;
-        }
-        // Use next multiple of 9 to accommodate gateway button
+        // Use next multiple of 9 to accommodate buttons
         int size = baseSize == 45 ? 54 : 36;
-        ItemStack[] items = getStoredItems(ownerPlayer);
-        CharmStorageHolder holder = new CharmStorageHolder(owner, baseSize, getCharmMenuTitle() + " Shared Storage", true);
+        
+        // Get storage ID from gateway item in viewer's hand
+        ItemStack gatewayItem = viewer.getInventory().getItemInMainHand();
+        String storageId = null;
+        int allowedPages = -1; // -1 means all pages
+        if (isGateway(gatewayItem)) {
+            storageId = gatewayItem.getItemMeta().getPersistentDataContainer().get(storageIdKey, PersistentDataType.STRING);
+            String allowedPagesStr = gatewayItem.getItemMeta().getPersistentDataContainer().get(gatewayAllowedPagesKey, PersistentDataType.STRING);
+            if (allowedPagesStr != null) {
+                allowedPages = Integer.parseInt(allowedPagesStr);
+            }
+        }
+        
+        if (storageId == null) {
+            storageId = owner.toString(); // Fallback
+        }
+        
+        int totalPages = 1;
+        int currentPage = 0;
+        
+        ItemStack[] items = getStoredItemsByIdForPage(storageId, currentPage, baseSize);
+        CharmStorageHolder holder = new CharmStorageHolder(owner, baseSize, getCharmMenuTitle() + " Shared Storage", true, currentPage, totalPages, allowedPages);
         var inv = Bukkit.createInventory(holder, size, holder.title());
         holder.bind(inv);
         for (int i = 0; i < Math.min(items.length, baseSize); i++) {
             inv.setItem(i, items[i]);
         }
-        // Add gateway button in the last row (disabled for viewers)
-        ItemStack gatewayButton = new ItemStack(org.bukkit.Material.ENDER_EYE);
-        var meta = gatewayButton.getItemMeta();
-        meta.setDisplayName(ChatColor.DARK_PURPLE + "Gateway");
-        meta.setLore(List.of(
-            ChatColor.GRAY + "Shared storage from " + Bukkit.getOfflinePlayer(owner).getName(),
-            ChatColor.RED + "Only the owner can create new gateways"
-        ));
-        gatewayButton.setItemMeta(meta);
-        inv.setItem(size - 5, gatewayButton); // Place in middle of last row
+        
+        // Add buttons in the last row
+        addStorageButtons(inv, size, currentPage, totalPages, viewer, false);
+        
         viewer.openInventory(inv);
     }
 
@@ -709,11 +1033,25 @@ public final class CharmService {
                 size = active.level() >= 2 ? STORAGE_LEVEL2_SLOTS : STORAGE_LEVEL1_SLOTS;
             }
         }
+        
+        Integer currentPageObj = player.getPersistentDataContainer().get(storageCurrentPageKey, PersistentDataType.INTEGER);
+        int currentPage = (currentPageObj == null) ? 0 : currentPageObj;
+        
         ItemStack[] stored = new ItemStack[size];
         for (int i = 0; i < size && i < contents.length; i++) {
             stored[i] = contents[i];
         }
-        setStoredItems(player, stored, size);
+        setStoredItemsForPage(player, currentPage, stored, size);
+        
+        // Save using storage ID for proper isolation
+        String storageId = getStorageId(player);
+        if (storageId != null) {
+            saveStorageToFile(storageId, stored, size);
+            saveStorageIdToFile(player.getUniqueId(), storageId);
+        } else {
+            // Fallback to player UUID if no storage ID
+            saveStorageToFile(player.getUniqueId(), stored, size);
+        }
     }
 
     public void saveAllPlayerData(Player player) {
@@ -796,6 +1134,76 @@ public final class CharmService {
 
     public NamespacedKey storageOpenKey() {
         return storageOpenKey;
+    }
+
+    public NamespacedKey storagePagesKey() {
+        return storagePagesKey;
+    }
+
+    public NamespacedKey storageCurrentPageKey() {
+        return storageCurrentPageKey;
+    }
+
+    public NamespacedKey gatewayAllowedPagesKey() {
+        return gatewayAllowedPagesKey;
+    }
+
+    public NamespacedKey storageIdKey() {
+        return storageIdKey;
+    }
+
+    public String getStorageId(Player player) {
+        CharmItem active = getActiveCharm(player);
+        if (active == null || active.type() != CharmType.STORAGE) {
+            return null;
+        }
+        ItemStack charm = player.getInventory().getItemInMainHand();
+        if (charm == null || !isCharm(charm)) {
+            charm = player.getInventory().getItemInOffHand();
+        }
+        if (charm == null || !isCharm(charm)) {
+            return null;
+        }
+        return charm.getItemMeta().getPersistentDataContainer().get(storageIdKey, PersistentDataType.STRING);
+    }
+
+    public String getStorageIdFromCharm(ItemStack charm) {
+        if (charm == null || !isCharm(charm)) {
+            return null;
+        }
+        return charm.getItemMeta().getPersistentDataContainer().get(storageIdKey, PersistentDataType.STRING);
+    }
+
+    public String getStorageIdOffline(UUID owner) {
+        java.io.File dataFile = new java.io.File(plugin.getDataFolder(), "storage_" + owner.toString() + ".yml");
+        if (!dataFile.exists()) {
+            return null;
+        }
+        try {
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(dataFile);
+            return config.getString("storage_id");
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public void saveStorageIdToFile(UUID owner, String storageId) {
+        try {
+            if (!plugin.getDataFolder().exists()) {
+                plugin.getDataFolder().mkdirs();
+            }
+            java.io.File dataFile = new java.io.File(plugin.getDataFolder(), "storage_" + owner.toString() + ".yml");
+            YamlConfiguration config;
+            if (dataFile.exists()) {
+                config = YamlConfiguration.loadConfiguration(dataFile);
+            } else {
+                config = new YamlConfiguration();
+            }
+            config.set("storage_id", storageId);
+            config.save(dataFile);
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to save storage ID for " + owner + ": " + e.getMessage());
+        }
     }
 
     public NamespacedKey natureAutoReplantKey() {
